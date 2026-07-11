@@ -1,0 +1,13 @@
+{
+  "name": "digisynk-mcp",
+  "version": "1.0.0",
+  "description": "Servidor MCP Oficial da Digisynk (via API REST)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.1.0",
+    "axios": "^1.6.0"
+  }
+}

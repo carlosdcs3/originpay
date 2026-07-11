@@ -1,0 +1,32 @@
+{
+    "files": {
+        "resources/js/utils.js": [
+            "dark-theme",
+            "modal"
+        ],
+        "resources/views/components/ui/tab/index.blade.php": [
+            "tabs"
+        ],
+        "resources/views/components/ui/tab/group.blade.php": [
+            "tabs"
+        ],
+        "resources/views/components/ui/tab/panel.blade.php": [
+            "tabs"
+        ],
+        "resources/js/globals/modals.js": [
+            "modal"
+        ]
+    },
+    "helpers": [],
+    "internalDependencies": {
+        "icon": [
+            "button",
+            "badge",
+            "dropdown",
+            "input"
+        ],
+        "button": [
+            "badge"
+        ]
+    }
+}

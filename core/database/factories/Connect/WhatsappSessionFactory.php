@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\WhatsappSession;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass WhatsappSessionFactory extends Factory\n{\n    protected $model = WhatsappSession::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

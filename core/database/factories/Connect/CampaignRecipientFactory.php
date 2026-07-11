@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\CampaignRecipient;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass CampaignRecipientFactory extends Factory\n{\n    protected $model = CampaignRecipient::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

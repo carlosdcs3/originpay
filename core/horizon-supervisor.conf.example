@@ -1,0 +1,12 @@
+[program:horizon]
+process_name=%(program_name)s
+command=php /caminho/para/o/projeto/core/artisan horizon
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/caminho/para/o/projeto/core/storage/logs/horizon.log
+stopwaitsecs=3600
+; memory_limit=256M deve ser ajustado no php.ini CLI.
+; Se o Horizon consumir mais do que 'memory_limit' no config/horizon.php, 
+; ele será reiniciado com graceful stop sem perder os Jobs ativos.

@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\UsageLimit;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass UsageLimitFactory extends Factory\n{\n    protected $model = UsageLimit::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

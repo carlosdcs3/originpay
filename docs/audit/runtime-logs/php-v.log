@@ -1,0 +1,10 @@
+COMMAND: E:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe -v
+CWD: E:\projetos\DigiKash v1.0.5\DigiKash v1.0.5\core
+EXIT_CODE: 0
+--- STDOUT ---
+PHP 8.3.30 (cli) (built: Jan 13 2026 22:50:40) (ZTS Visual C++ 2019 x64)
+Copyright (c) The PHP Group
+Zend Engine v4.3.30, Copyright (c) Zend Technologies
+
+--- STDERR ---
+

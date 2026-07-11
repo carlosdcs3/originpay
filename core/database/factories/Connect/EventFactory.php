@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\Event;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass EventFactory extends Factory\n{\n    protected $model = Event::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

@@ -1,0 +1,4 @@
+<option selected disabled>{{ __('Select currency') }}</option>
+@foreach($supportedCurrencies ?? [] as $currency)
+    <option value="{{ $currency }}">{{ $currency }}</option>
+@endforeach

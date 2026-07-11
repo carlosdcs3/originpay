@@ -1,0 +1,577 @@
+COMMAND: E:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe artisan test
+CWD: E:\projetos\DigiKash v1.0.5\DigiKash v1.0.5\core
+EXIT_CODE: 0
+--- STDOUT ---
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                                                            0.01s  
+
+   PASS  Tests\Unit\PaymentMethod\PaymentMethodCoreTest
+  ✓ can create payment method safely                                                                             0.02s  
+  ✓ vault mock strips cvv and returns token
+  ✓ expiration logic
+  ✓ expiration logic valid
+
+   PASS  Tests\Unit\PixKeyValidationTest
+  ✓ valid cpf passes
+  ✓ invalid cpf fails
+  ✓ invalid cpf algorithm fails
+  ✓ valid cnpj passes
+  ✓ invalid cnpj fails
+  ✓ valid phone passes
+  ✓ invalid phone fails
+  ✓ valid email passes
+  ✓ invalid email fails
+  ✓ valid random passes
+  ✓ invalid random fails
+
+   PASS  Tests\Unit\SingletonTest
+  ✓ it ensures CurrencyService is a singleton
+
+   PASS  Tests\Feature\AdminContentAuditTest
+  ✓ primary admin views do not use legacy brand or fake ctas                                                     0.19s  
+  ✓ legacy admin api and gateway artifacts were removed                                                          0.03s  
+  ✓ admin route file no longer declares legacy api cluster                                                       0.03s  
+
+   PASS  Tests\Feature\AdminNavigationConfigTest
+  ✓ admin sidebar sections match originpay structure                                                             0.03s  
+  ✓ removed admin menu entries are not present anymore                                                           0.03s  
+
+   PASS  Tests\Feature\AdminUIComponentsTest
+  ✓ badge component renders                                                                                      0.03s  
+  ✓ skeleton component renders                                                                                   0.03s  
+  ✓ empty state component renders                                                                                0.03s  
+  ✓ stat card component renders                                                                                  0.03s  
+  ✓ table component renders with slots                                                                           0.03s  
+
+   PASS  Tests\Feature\AnomalyScannerTest
+  ✓ scanner deduplicates by fingerprint                                                                          0.71s  
+  ✓ resolving anomaly preserves history                                                                          0.03s  
+  ✓ score never goes below zero                                                                                  0.03s  
+
+   PASS  Tests\Feature\AuthenticateMiddlewareRedirectTest
+  ✓ unauthenticated user accessing protected user route redirects to user login                                  0.06s  
+  ✓ unauthenticated admin accessing admin route redirects to admin login                                         0.03s  
+  ✓ unauthenticated api request returns 401 json                                                                 0.04s  
+
+   PASS  Tests\Feature\BackupDisasterTest
+  ✓ missing backup generates anomaly                                                                             0.04s  
+  ✓ verify restore dry run command fails on missing file                                                         0.04s  
+
+   PASS  Tests\Feature\BoletoChargeTest
+  ✓ boleto charge is created and persists boleto fields and fees                                                 0.07s  
+  ✓ api returns boleto payload                                                                                   0.06s  
+  ✓ paid and expired webhooks update boleto charge                                                               0.06s  
+  ✓ second copy updates boleto links without new charge                                                          0.05s  
+  ✓ legacy boleto dashboard redirects to charges filtered by boleto                                              0.07s  
+
+   PASS  Tests\Feature\ChargeEngineTest
+  ✓ charge creation success mock                                                                                 0.07s  
+  ✓ charge creation failed mock                                                                                  0.04s  
+
+   PASS  Tests\Feature\ChargePaidEventListenerTest
+  ✓ charge paid event dispatch queues each listener once                                                         0.03s  
+
+   PASS  Tests\Feature\ChargeServiceOrphanFlowTest
+  ✓ successful mock gateway charge is persisted waiting payment                                                  0.04s  
+  ✓ unknown gateway adapter failure does not leave pending orphan charge                                         0.04s  
+  ✓ redis funnel throwable with gateway failure does not leave pending orphan charge                             0.04s  
+  ✓ no available gateway does not leave pending orphan charge                                                    0.04s  
+
+   PASS  Tests\Feature\ChargeServicePlatformFeeTest
+  ✓ charge without override uses global platform fee rule                                                        0.04s  
+  ✓ charge with override uses individual platform fee rule                                                       0.04s  
+  ✓ charge persists fee snapshot and does not recalculate after rule changes                                     0.04s  
+  ✓ charge uses safe fallback when no active rule exists                                                         0.04s  
+  ✓ negative net amount is rejected                                                                              0.03s  
+
+   PASS  Tests\Feature\CircuitBreakerServiceTest
+  ✓ circuit starts closed                                                                                        0.03s  
+  ✓ nineteen failures keep circuit closed                                                                        0.03s  
+  ✓ twentieth failure opens circuit                                                                              0.03s  
+  ✓ cooldown allows half open                                                                                    0.03s  
+  ✓ success in half open closes circuit                                                                          0.03s  
+  ✓ failure in half open reopens circuit                                                                         0.03s  
+
+   PASS  Tests\Feature\ComplianceGovernanceTest
+  ✓ shared pix key forces manual review                                                                          0.04s  
+  ✓ shared pix key generates anomaly                                                                             0.03s  
+  ✓ dual approval requires different admins                                                                      0.03s  
+  ✓ second approval requires financial role                                                                      0.03s  
+  ✓ behavioral risk uses financial context                                                                       0.03s  
+  ✓ large first withdraw is high risk                                                                            0.03s  
+  ✓ withdrawal exposure dashboard metrics                                                                        0.03s  
+  ✓ dual approval bypass generates anomaly                                                                       0.04s  
+  ✓ frozen account cannot withdraw                                                                               0.03s  
+
+   PASS  Tests\Feature\Connect\AccessControlTest
+  ✓ user without subscription cannot access premium                                                              0.03s  
+  ✓ user with active subscription accesses premium                                                               0.03s  
+  ✓ user trialing accesses premium                                                                               0.03s  
+  ✓ user canceled cannot access                                                                                  0.03s  
+  ✓ user suspended cannot access                                                                                 0.03s  
+  ✓ domain limit blocks second domain                                                                            0.03s  
+  ✓ whatsapp limit blocks second number                                                                          0.03s  
+  ✓ monthly email limit blocks excess                                                                            0.03s  
+  ✓ merchant cannot access other merchant data                                                                   0.03s  
+  ✓ transactional emails continue allowed                                                                        0.03s  
+  ✓ past due within grace period accesses                                                                        0.03s  
+  ✓ past due outside grace period blocks                                                                         0.03s  
+  ✓ whatsapp feature flag disabled blocks whatsapp even with active sub                                          0.03s  
+  ✓ connect module flag disabled blocks everything                                                               0.03s  
+  ✓ context queries database only once per request                                                               0.03s  
+  ✓ concurrency row lock on usage reset                                                                          0.03s  
+  ✓ capabilities are resolved correctly from plan                                                                0.03s  
+  ✓ has feature is o1 lookup without collections                                                                 0.03s  
+  ✓ addon resolver passthrough works correctly                                                                   0.03s  
+  ✓ feature flag resolver passthrough works correctly                                                            0.03s  
+
+   PASS  Tests\Feature\Connect\CampaignEngineTest
+  ✓ state machine blocks invalid transitions                                                                     0.04s  
+  ✓ validator rejects unpublished templates                                                                      0.03s  
+  ✓ validator rejects channel mismatch                                                                           0.03s  
+  ✓ scheduling takes correct snapshots in db and json                                                            0.03s  
+  ✓ dry run executes end to end without changing status                                                          0.03s  
+  ✓ audience resolver exposes lazy collection                                                                    0.03s  
+
+   PASS  Tests\Feature\Connect\CampaignExecutionPipelineTest
+  ✓ dispatcher finds due campaigns and ignores future                                                            0.03s  
+  ✓ prepare job creates recipients in batch with idempotency                                                     0.03s  
+  ✓ process job compiles payload and uses mock sender                                                            0.03s  
+  ✓ finalize job only completes when pending is zero                                                             0.03s  
+
+   PASS  Tests\Feature\Connect\ContactHubTest
+  ✓ create contact associates with tenant                                                                        0.03s  
+  ✓ cannot create duplicate email for same merchant                                                              0.03s  
+  ✓ cannot create duplicate whatsapp for same merchant                                                           0.03s  
+  ✓ repository search returns paginated and eager loads tags                                                     0.03s  
+  ✓ merge contacts combines tags and deletes source                                                              0.03s  
+  ✓ tag migration is idempotent                                                                                  0.03s  
+  ✓ audit events are fired                                                                                       0.03s  
+
+   PASS  Tests\Feature\Connect\SmartSegmentsTest
+  ✓ create segment validates json structure                                                                      0.03s  
+  ✓ engine translates equals and contains to query builder                                                       0.03s  
+  ✓ engine translates or conditions correctly                                                                    0.03s  
+  ✓ engine nested groups produce correct sql                                                                     0.03s  
+  ✓ preview returns count without memory leak                                                                    0.03s  
+  ✓ policies block access using segment capabilities                                                             0.03s  
+  ✓ migration upgrades old rules to json format                                                                  0.03s  
+
+   PASS  Tests\Feature\Connect\UniversalTemplateTest
+  ✓ deterministic renderer outputs identical results for same ast                                                0.03s  
+  ✓ invalid ast block throws validation error                                                                    0.03s  
+  ✓ invalid channel throws exception                                                                             0.03s  
+  ✓ security validator blocks blade and php                                                                      0.03s  
+  ✓ editing published template creates new draft version                                                         0.03s  
+  ✓ variable registry exposes metadata for ui                                                                    0.03s  
+  ✓ compiler memory cache works                                                                                  0.03s  
+
+   PASS  Tests\Feature\CustomerSubscriptionApiTest
+  ✓ merchant creates subscription invoice and first charge                                                       0.05s  
+  ✓ charge service failure marks subscription incomplete and invoice failed                                      0.04s  
+  ✓ body idempotency key returns same resource for same merchant                                                 0.05s  
+  ✓ idempotency key is scoped by merchant                                                                        0.05s  
+  ✓ header idempotency key has priority over body key                                                            0.04s  
+  ✓ merchant a cannot access merchant b subscription                                                             0.04s  
+  ✓ cancel at period end does not cancel immediately                                                             0.04s  
+  ✓ immediate cancel marks subscription canceled                                                                 0.04s  
+  ✓ list only returns authenticated merchants subscriptions                                                      0.04s  
+
+   PASS  Tests\Feature\CustomerSubscriptionDashboardTest
+  ✓ index lists only authenticated merchants subscriptions                                                       0.06s  
+  ✓ show blocks another merchants subscription                                                                   0.04s  
+  ✓ immediate cancel works                                                                                       0.04s  
+  ✓ cancel at period end works                                                                                   0.04s  
+  ✓ filters work                                                                                                 0.05s  
+  ✓ kpis are calculated from real customer subscriptions                                                         0.05s  
+  ✓ empty state uses real developer documentation links                                                          0.05s  
+  ✓ pagination preserves filters and orders latest first                                                         0.06s  
+  ✓ show displays invoice and charge operational details                                                         0.05s  
+  ✓ menu points to real subscriptions route                                                                      0.05s  
+
+   PASS  Tests\Feature\CustomerSubscriptionPaymentSyncTest
+  ✓ paid charge activates subscription and marks invoice paid                                                    0.04s  
+  ✓ duplicate paid event is idempotent                                                                           0.04s  
+  ✓ expired charge marks invoice failed and subscription incomplete                                              0.04s  
+  ✓ failed charge for active subscription marks past due                                                         0.04s  
+  ✓ subscription from another merchant is not affected                                                           0.04s  
+  ✓ charge without subscription invoice is ignored                                                               0.03s  
+
+   PASS  Tests\Feature\CustomerSubscriptionRenewalTest
+  ✓ active due subscription generates next invoice and charge                                                    0.05s  
+  ✓ running renewal twice does not duplicate invoice or charge                                                   0.04s  
+  ✓ subscription lock prevents duplicate processing                                                              0.04s  
+  ✓ command outputs operational summary                                                                          0.04s  
+  ✓ canceled subscription is ignored                                                                             0.04s  
+  ✓ cancel at period end cancels subscription when period is due                                                 0.04s  
+  ✓ charge service failure marks invoice failed and subscription past due                                        0.04s  
+  ✓ payment after renewal uses phase two listener                                                                0.05s  
+  ✓ tenant isolation preserves each subscription owner                                                           0.05s  
+
+   PASS  Tests\Feature\CustomerSubscriptionWebhookTest
+  ✓ webhook is sent when subscription is created                                                                 0.07s  
+  ✓ webhook is sent when invoice is paid                                                                         0.04s  
+  ✓ webhook is sent when invoice fails                                                                           0.04s  
+  ✓ webhook is sent when subscription is canceled                                                                0.04s  
+  ✓ duplicate events do not duplicate webhook delivery                                                           0.04s  
+  ✓ payload does not leak data from another merchant                                                             0.04s  
+
+   PASS  Tests\Feature\DisasterRecoveryTest
+  ✓ transaction rolls back on fatal disaster                                                                     0.04s  
+
+   PASS  Tests\Feature\EfiGatewayAdapterTest
+  ✓ efi authorize creates pix charge                                                                             0.03s  
+
+   PASS  Tests\Feature\EfiGatewayTest
+  ✓ efi gateway create pix                                                                                       0.03s  
+  ✓ efi webhook parsing                                                                                          0.03s  
+  ✓ efi refund                                                                                                   0.03s  
+  ✓ efi missing credentials fails controlled                                                                     0.03s  
+
+   PASS  Tests\Feature\EfiOAuthServiceTest
+  ✓ it obtains and caches access token                                                                           0.03s  
+
+   PASS  Tests\Feature\EfiReconciliationTest
+  ✓ reconcile command detects missing local transaction                                                          0.04s  
+  ✓ reconcile command detects status mismatch                                                                    0.04s  
+
+   PASS  Tests\Feature\EfiWebhookTest
+  ✓ efi webhook updates charge to succeeded                                                                      0.04s  
+
+   PASS  Tests\Feature\EfiWithdrawReconciliationTest
+  ✓ detects stuck withdraw                                                                                       0.04s  
+
+   PASS  Tests\Feature\FeesPilotActionTest
+  ✓ platform fee simulator uses global rule                                                                      0.03s  
+  ✓ platform fee simulator can use specific rule                                                                 0.03s  
+
+   PASS  Tests\Feature\Finance\AdvancedConcurrencyTest
+  ✓ it handles thousands of identical webhooks without double spending                                           0.03s  
+  ✓ it handles database failure during commit                                                                    0.03s  
+
+   PASS  Tests\Feature\Finance\ChaosTest
+  ✓ it fails gracefully when redis is down during lock                                                           0.03s  
+  ✓ it handles gateway timeout without duplicating transactions                                                  0.03s  
+
+   PASS  Tests\Feature\Finance\ConcurrencyTest
+  ✓ it prevents duplicate webhook processing via distributed lock                                                0.04s  
+  ✓ it prevents race conditions on wallet balances during concurrent transfers                                   0.03s  
+  ✓ it preserves consistent balances during rollback                                                             0.04s  
+
+   PASS  Tests\Feature\Finance\LedgerImmutabilityTest
+  ✓ it prevents orm updates and deletes                                                                          0.03s  
+  ✓ it prevents query builder mass updates                                                                       0.03s  
+
+   PASS  Tests\Feature\FinancialConcurrencyTest
+  ✓ webhook duplicado nao credita duas vezes                                                                     0.05s  
+  ✓ saque sem saldo falha com rollback                                                                           0.03s  
+
+   PASS  Tests\Feature\FraudIntelligenceTest
+  ✓ fingerprint uses hmac sha256                                                                                 0.03s  
+  ✓ shared device isolated does not freeze account                                                               0.04s  
+  ✓ duplicate cpf freezes account                                                                                0.03s  
+  ✓ high score blocks withdraw but not freeze                                                                    0.03s  
+
+   PASS  Tests\Feature\FrontendWithdrawControllerTest
+  ✓ withdraw request is not blocked by processing schedule when platform and gateway allow                       0.05s  
+  ✓ withdraw request is blocked when platform disables withdrawals                                               0.04s  
+  ✓ withdraw request is blocked when user has not completed kyc                                                  0.04s  
+  ✓ withdraw request is blocked when liquidity is critical                                                       0.04s  
+
+   PASS  Tests\Feature\GatewayConcurrencyTest
+  ✓ concurrency limiter rejects after limit                                                                      0.03s  
+
+   PASS  Tests\Feature\GatewayFeeTest
+  ✓ fee calculation fixed and percent                                                                            0.03s  
+  ✓ fee calculation withdraw                                                                                     0.03s  
+  ✓ negative net amount throws exception                                                                         0.03s  
+  ✓ snapshot is created on transaction                                                                           0.04s  
+  ✓ snapshot immutability                                                                                        0.03s  
+
+   PASS  Tests\Feature\GatewayLedgerTest
+  ✓ credit in specific gateway                                                                                   0.04s  
+  ✓ debit in specific gateway                                                                                    0.04s  
+  ✓ withdrawal attempt with insufficient gateway balance                                                         0.04s  
+  ✓ legacy migration idempotency                                                                                 0.04s  
+  ✓ concurrent debits                                                                                            0.04s  
+
+   PASS  Tests\Feature\GatewayManagerTest
+  ✓ gateway manager falls back when primary gateway cannot execute                                               0.04s  
+  ✓ gateway manager fallback on unconfigured sandbox                                                             0.03s  
+  ✓ gateway manager fails on unconfigured production                                                             0.03s  
+
+   PASS  Tests\Feature\GatewayWebhookOfflineTest
+  ✓ returns 500 if redis is offline during dispatch                                                              0.04s  
+
+   PASS  Tests\Feature\GatewayWebhookValidationTest
+  ✓ webhook without signature is rejected and not queued                                                         0.03s  
+  ✓ webhook with invalid signature is rejected and not queued                                                    0.04s  
+  ✓ unknown provider is rejected and not queued                                                                  0.04s  
+  ✓ invalid payload is rejected and not queued                                                                   0.04s  
+  ✓ provider without validation support is rejected and not queued                                               0.04s  
+  ✓ valid webhook is accepted and queued                                                                         0.04s  
+
+   PASS  Tests\Feature\Gateway\EfiProviderTest
+  ✓ oauth cache stampede protection                                                                              0.04s  
+  ✓ efi provider idempotency with txid                                                                           0.04s  
+  ✓ log sanitization removes sensitive data                                                                      0.03s  
+
+   PASS  Tests\Feature\Gateway\Providers\EfiProviderTest
+  ✓ efi provider instantiates                                                                                    0.03s  
+
+   PASS  Tests\Feature\Gateway\Security\EfiOAuthDriverTest
+  ✓ efi oauth driver checks cert                                                                                 0.03s  
+
+   PASS  Tests\Feature\HorizonInfrastructureTest
+  ✓ horizon dashboard is protected                                                                               0.04s  
+  ✓ process webhook job uses high queue                                                                          0.03s  
+
+   PASS  Tests\Feature\IdempotencyTest
+  ✓ webhook duplicado nao credita duas vezes                                                                     0.03s  
+  ✓ ledger immutable                                                                                             0.03s  
+
+   PASS  Tests\Feature\KycAndOperationalLimitsTest
+  ✓ user cannot exceed kyc level limit                                                                           0.04s  
+  ✓ rolling reserve reduces available balance                                                                    0.04s  
+  ✓ rolling reserve is released after period                                                                     0.03s  
+  ✓ large withdraw goes to batch                                                                                 0.04s  
+  ✓ dual approval required for large withdraw                                                                    0.04s  
+  ✓ kyc limit lock allows inbound blocks outbound                                                                0.03s  
+
+   PASS  Tests\Feature\KycOperationsCenterTest
+  ✓ kyc score approval                                                                                           0.03s  
+  ✓ kyc score rejection                                                                                          0.03s  
+  ✓ pix owner mismatch generates review                                                                          0.04s  
+  ✓ feature flags disable deposits                                                                               0.03s  
+  ✓ seller health score calculation                                                                              0.03s  
+
+   PASS  Tests\Feature\LedgerIntegrityHardeningTest
+  ✓ wallet transaction generates integrity hash and links previous hash                                          0.03s  
+  ✓ ledger integrity classifies missing hash without hash mismatch                                               0.04s  
+  ✓ ledger integrity classifies tampered hash as hash mismatch                                                   0.04s  
+  ✓ ledger integrity accepts valid transactions without error                                                    0.04s  
+
+   PASS  Tests\Feature\LedgerTest
+  ✓ add money creates ledger entry and updates balance                                                           0.04s  
+  ✓ subtract money creates ledger entry and updates balance                                                      0.04s  
+  ✓ transfer creates two legs in ledger                                                                          0.04s  
+  ✓ debit without balance fails                                                                                  0.03s  
+  ✓ ledger entry cannot be edited                                                                                0.04s  
+  ✓ ledger entry cannot be deleted                                                                               0.03s  
+  ✓ 2 step deposit                                                                                               0.04s  
+  ✓ 2 step payout                                                                                                0.04s  
+  ✓ split balanced                                                                                               0.05s  
+  ✓ split invalid fails                                                                                          0.03s  
+  ✓ fx with metadata                                                                                             0.04s  
+  ✓ system general fails in new flows                                                                            0.03s  
+
+   PASS  Tests\Feature\LegacyPaymentWithdrawalTest
+  ✓ legacy withdrawal service accepts gateway with active pix withdraw flags                                     0.04s  
+  ✓ legacy withdrawal service returns specific message when gateway cannot process pix withdraw                  0.03s  
+  ✓ legacy withdrawal request reduces only available balance                                                     0.04s  
+  ✓ legacy withdrawal approval debits balance once                                                               0.05s  
+  ✓ legacy withdrawal rejection restores only available balance                                                  0.04s  
+  ✓ legacy withdrawal fails when available balance is insufficient                                               0.03s  
+  ✓ legacy withdrawal approval is idempotent                                                                     0.05s  
+
+   PASS  Tests\Feature\LiquidityCoverageTest
+  ✓ liquidity green when balance exceeds withdrawable                                                            0.04s  
+  ✓ liquidity critical when balance is below 95 percent                                                          0.03s  
+
+   PASS  Tests\Feature\ModernPaymentGatewayTest
+  ✓ factory resolves provider type correctly                                                                     0.03s  
+  ✓ invalid provider fails with clear error                                                                      0.03s  
+  ✓ modern webhook returns webhook dto                                                                           0.03s  
+  ✓ modern gateway does not touch database                                                                       0.03s  
+
+   PASS  Tests\Feature\NewProviderEndToEndTest
+  ✓ process webhook paid deposits money and updates status                                                       0.05s  
+  ✓ duplicate paid webhook is idempotent                                                                         0.05s  
+  ✓ refund webhook generates refund transaction idempotently                                                     0.04s  
+  ✓ chargeback webhook generates chargeback idempotently                                                         0.04s  
+
+   PASS  Tests\Feature\NewProviderGatewayTest
+  ✓ create deposit returns dto                                                                                   0.04s  
+  ✓ verify webhook valid signature                                                                               0.03s  
+  ✓ verify webhook invalid signature                                                                             0.03s  
+  ✓ verify webhook replay attack                                                                                 0.03s  
+  ✓ verify webhook altered payload                                                                               0.03s  
+
+   PASS  Tests\Feature\NewProviderHardeningTest
+  ✓ circuit breaker blocks outbound but allows inbound                                                           0.03s  
+  ✓ circuit breaker allows inbound webhook                                                                       0.03s  
+  ✓ dlq saves internal errors with valid signature and masks payload                                             0.04s  
+  ✓ invalid signature does not save in dlq                                                                       0.04s  
+  ✓ outbound requests have idempotency headers and logs                                                          0.03s  
+  ✓ retry on 429                                                                                                 0.25s  
+
+   PASS  Tests\Feature\NewProviderRolloutTest
+  ✓ kill switch blocks outbound                                                                                  0.04s  
+  ✓ kill switch allows inbound webhooks                                                                          0.03s  
+  ✓ feature flag is disabled globally                                                                            0.03s  
+  ✓ feature flag by whitelist                                                                                    0.03s  
+  ✓ feature flag by percentage                                                                                   0.03s  
+
+   PASS  Tests\Feature\PaymentLinkDashboardTest
+  ✓ charge index uses choice modal for new charge flow                                                           0.05s  
+  ✓ charge index filters all payment methods in single charges page                                              0.06s  
+  ✓ charge index searches by operational references                                                              0.08s  
+  ✓ legacy pix and card urls redirect to charges with method filter                                              0.04s  
+  ✓ english subscriptions url redirects to customer subscriptions dashboard                                      0.04s  
+  ✓ manual charge and payment link create pages render v2 flow copy                                              0.05s  
+  ✓ dashboard creates payment link intent without charge                                                         0.04s  
+  ✓ dashboard creates subscription link intent without subscription or charge                                    0.04s  
+  ✓ public checkout renders customer form without login                                                          0.04s  
+  ✓ customer submits checkout and creates pix charge                                                             0.05s  
+  ✓ customer submits checkout and creates boleto charge                                                          0.04s  
+  ✓ customer submits checkout and creates card charge                                                            0.05s  
+  ✓ subscription checkout creates subscription and first charge                                                  0.05s  
+  ✓ method not allowed is blocked                                                                                1.49s  
+  ✓ expired canceled and paid links block new charges                                                            3.51s  
+  ✓ multiple submits do not create duplicate charges                                                             0.05s  
+  ✓ charge status update syncs payment link without opening checkout                                             0.03s  
+  ✓ merchant cannot cancel another merchants payment link                                                        0.04s  
+  ✓ generated slugs are unique                                                                                   0.05s  
+  ✓ invalid public slug returns not found without leaking data                                                   0.04s  
+
+   PASS  Tests\Feature\PaymentsApiSkeletonTest
+  ✓ can create session with valid payload                                                                        0.05s  
+  ✓ rejects invalid amount                                                                                       0.04s  
+  ✓ rejects currency different than brl                                                                          0.04s  
+  ✓ can create payment method card valid                                                                         0.04s  
+  ✓ rejects invalid type payment method                                                                          0.04s  
+  ✓ rejects expired card                                                                                         0.04s  
+  ✓ get payment method returns safe data                                                                         0.04s  
+  ✓ get inexistent payment method returns 404 standardized                                                       0.04s  
+
+   PASS  Tests\Feature\PaymentsAuthenticationTest
+  ✓ missing api key returns unauthorized                                                                         0.04s  
+  ✓ invalid api key returns unauthorized                                                                         0.03s  
+  ✓ valid api key returns merchant context                                                                       0.04s  
+
+   PASS  Tests\Feature\PaymentsIdempotencyTest
+  ✓ idempotency returns cached response for same key                                                             0.04s  
+
+   PASS  Tests\Feature\PlatformFeeAdminTest
+  ✓ admin creates global platform fee rule                                                                       0.04s  
+  ✓ admin creates individual merchant override                                                                   0.04s  
+  ✓ customer cannot access admin platform fee panel                                                              0.03s  
+  ✓ platform fee rule change writes audit log                                                                    0.04s  
+  ✓ inactive rule is not resolved as applicable                                                                  0.04s  
+  ✓ simulator matches platform fee calculator                                                                    0.04s  
+
+   PASS  Tests\Feature\PlatformFeeCalculatorTest
+  ✓ calculates fixed plus percentage fee                                                                         0.04s  
+  ✓ respects minimum fee                                                                                         0.03s  
+  ✓ respects maximum fee                                                                                         0.03s  
+  ✓ calculates fee by amount tiers                                                                               0.03s  
+  ✓ rejects negative amount                                                                                      0.03s  
+  ✓ rejects fee greater than gross amount                                                                        0.03s  
+
+   PASS  Tests\Feature\PlatformFeeResolverTest
+  ✓ customer without individual rule uses global rule                                                            0.03s  
+  ✓ customer individual rule overrides global rule                                                               0.03s  
+  ✓ expired individual rule is ignored                                                                           0.04s  
+  ✓ future individual rule is ignored                                                                            0.03s  
+  ✓ uses safe fallback when no active rule exists                                                                0.03s  
+
+   PASS  Tests\Feature\ServiceSingletonTest
+  ✓ currency service alias is a singleton                                                                        0.03s  
+  ✓ wallet service is a singleton                                                                                0.03s  
+  ✓ transaction service is a singleton                                                                           0.03s  
+  ✓ payment service is a singleton                                                                               0.03s  
+  ✓ different services are distinct                                                                              0.03s  
+
+   PASS  Tests\Feature\SystemObservabilityTest
+  ✓ health endpoint is accessible by admin                                                                       0.09s  
+  ✓ metrics are incremented in cache windows                                                                     0.03s  
+  ✓ sentry scrubber masks sensitive data                                                                         0.03s  
+  ✓ alert disparado quando dlq excede limite                                                                     0.06s  
+
+   PASS  Tests\Feature\TransactionImmutabilityTest
+  ✓ transaction delete throws exception                                                                          0.04s  
+  ✓ transaction amount update throws exception                                                                   0.03s  
+  ✓ transaction status cannot change from completed to canceled                                                  0.03s  
+  ✓ transaction status can change from pending to completed                                                      0.04s  
+  ✓ cancellation creates new transaction and preserves original                                                  0.04s  
+  ✓ refund creates new transaction and supports partial via system                                               0.05s  
+  ✓ duplicate refund is blocked                                                                                  0.04s  
+  ✓ refund via merchant fails if insufficient balance                                                            0.04s  
+  ✓ chargeback creates new transaction via gateway holding                                                       0.04s  
+
+   PASS  Tests\Feature\UserAccountPlatformFeeTest
+  ✓ customer without override sees default platform fee                                                          0.04s  
+  ✓ customer with override sees negotiated platform fee                                                          0.03s  
+  ✓ method without active rule uses safe fallback on account page                                                0.03s  
+
+   PASS  Tests\Feature\WalletBalanceRuntimeTest
+  ✓ wallet balances table exists after migration contract                                                        0.03s  
+  ✓ wallet balance query by gateway works without sqlstate                                                       0.04s  
+  ✓ wallet debit gateway fails controlled when gateway balance is insufficient                                   0.03s  
+  ✓ wallet debit gateway reduces available when balance is sufficient                                            0.03s  
+  ✓ wallet balance service uses available pending blocked schema                                                 0.04s  
+
+   PASS  Tests\Feature\WalletIntegrityTest
+  ✓ credit updates balance and available                                                                         0.04s  
+  ✓ debit uses available balance                                                                                 0.04s  
+  ✓ reservation does not change total balance                                                                    0.04s  
+  ✓ reservation release restores available balance                                                               0.04s  
+  ✓ withdrawal completion decreases reserved and total balance                                                   0.05s  
+  ✓ wallet reserve reconciliation detects mismatch                                                               0.04s  
+  ✓ anomaly scan detects negative available balance                                                              0.04s  
+  ✓ anomaly scan detects stuck reserved withdrawal                                                               0.04s  
+  ✓ user dashboard shows reserved balance                                                                        0.04s  
+
+   PASS  Tests\Feature\WarRoomSecurityTest
+  ✓ idor blocked between tenants                                                                                 0.04s  
+  ✓ admin access global data via bypass                                                                          0.03s  
+  ✓ user cannot mass assign balance or role                                                                      0.04s  
+  ✓ webhook distributed lock prevents duplicate processing                                                       0.03s  
+  ✓ withdraw race condition locked                                                                               0.03s  
+  ✓ beta readiness fails if debug is true                                                                        0.03s  
+
+   PASS  Tests\Feature\WebhookAdminPanelTest
+  ✓ unauthenticated user cannot access                                                                           0.04s  
+  ✓ admin can access index                                                                                       0.06s  
+  ✓ payload is masked in show event                                                                              0.07s  
+  ✓ single reprocess dispatches job                                                                              0.04s  
+  ✓ batch reprocess dispatches with delay and limits                                                             0.04s  
+  ✓ batch fails if above 50                                                                                      0.04s  
+  ✓ manual resolve requires reason and audits                                                                    0.04s  
+
+   PASS  Tests\Feature\WebhookAsyncProcessingTest
+  ✓ valid webhook creates event and dispatches job                                                               0.04s  
+  ✓ invalid webhook does not create event                                                                        0.04s  
+  ✓ duplicate webhook is ignored                                                                                 0.03s  
+  ✓ worker processes and marks processed                                                                         0.03s  
+  ✓ retry exhaustion moves to dlq                                                                                0.04s  
+  ✓ replay dlq creates new event                                                                                 0.03s  
+
+   PASS  Tests\Feature\WebhookEventContractTest
+  ✓ webhook event initial status is saved without exception                                                      0.03s  
+  ✓ replay webhook job creates event and dispatches processing job                                               0.03s  
+  ✓ replay webhook admin redirects success without value error                                                   0.04s  
+  ✓ process webhook job handles replayed event without column or enum errors                                     0.03s  
+  ✓ modern webhook for unimplemented provider returns controlled error                                           0.03s  
+
+   PASS  Tests\Feature\WebhookSignatureTest
+  ✓ signature is correctly generated                                                                             0.03s  
+  ✓ generate header contains t and v1                                                                            0.03s  
+
+   PASS  Tests\Feature\WebhookStressTest
+  ✓ webhook ingestion under high concurrency                                                                     0.16s  
+
+   PASS  Tests\Feature\WithdrawalFlowTest
+  ✓ reserved balance is never spendable                                                                          0.04s  
+  ✓ withdrawal creates reservation ledger entry                                                                  0.04s  
+  ✓ auto approval respects risk rules                                                                            0.04s  
+  ✓ pix key snapshot is immutable                                                                                0.04s  
+  ✓ failed withdrawal releases reservation                                                                       0.04s  
+
+  Tests:    396 passed (1353 assertions)
+  Duration: 20.72s
+
+
+--- STDERR ---
+

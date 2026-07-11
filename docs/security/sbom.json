@@ -1,0 +1,26 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "digisynk-core",
+      "version": "2.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "laravel/framework",
+      "version": "10.48.4",
+      "purl": "pkg:composer/laravel/framework@10.48.4"
+    },
+    {
+      "type": "library",
+      "name": "Livewire",
+      "version": "3.0",
+      "purl": "pkg:composer/livewire/livewire@3.0.0"
+    }
+  ]
+}

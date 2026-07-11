@@ -1,0 +1,83 @@
+/* Custom CSS for Enterprise UI */
+.admin-page-hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 0.5rem;
+    padding: 2rem;
+    color: white;
+    margin-bottom: 2rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+.admin-kpi-card {
+    transition: transform 0.2s;
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+.admin-kpi-card:hover {
+    transform: translateY(-2px);
+}
+.admin-smart-filter-bar {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+}
+.admin-data-table th {
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    background: #f8fafc;
+}
+.admin-data-table td {
+    vertical-align: middle;
+}
+.admin-table-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.admin-table-row:hover {
+    background-color: #f1f5f9;
+}
+.admin-offcanvas-drawer {
+    width: 500px !important;
+}
+.admin-timeline {
+    position: relative;
+    padding-left: 1.5rem;
+    list-style: none;
+}
+.admin-timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0.35rem;
+    width: 2px;
+    background: #e2e8f0;
+}
+.admin-timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+.admin-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.45rem;
+    top: 0.25rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+}
+.admin-empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #64748b;
+}
+.amount-in { color: #10b981; font-weight: 600; }
+.amount-out { color: #ef4444; font-weight: 600; }

@@ -1,0 +1,128 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local credentials / certificates / private keys
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
+**/*.cer
+**/id_rsa*
+**/id_ed25519*
+
+# PHP / Composer
+**/vendor/
+composer.phar
+.phpunit.result.cache
+.phpunit.cache/
+.php-cs-fixer.cache
+.phpstan.cache/
+.phpstan/
+.phpunit.cache
+
+# Laravel
+**/bootstrap/cache/*.php
+**/storage/*.key
+**/storage/framework/cache/
+**/storage/framework/sessions/
+**/storage/framework/testing/
+**/storage/framework/views/
+**/storage/logs/
+**/storage/debugbar/
+**/public/storage
+
+# Databases and dumps
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.sql
+**/*.dump
+**/*.bak
+
+# JavaScript
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/.npm/
+**/.yarn/cache/
+**/.pnpm-store/
+
+# Frontend builds
+**/dist/
+**/build/
+**/.next/
+**/.nuxt/
+**/.vite/
+**/coverage/
+
+# IDE / local agent tooling
+.idea/
+.vscode/
+*.code-workspace
+.agents/
+.claude/
+.codex/
+.codex-remote-attachments/
+.impeccable/
+.hermes/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.orig
+*.rej
+*~
+
+# Test and analysis artifacts
+**/.phpunit.cache/
+**/.pest-cache/
+**/junit.xml
+**/clover.xml
+**/coverage.xml
+**/coverage-html/
+
+# Local archives, backups, generated reports and scratch scripts
+backups/
+storage/
+core/_archive_legacy_review/
+core/DB/
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*_matches.json
+final_audit.json
+final_audit.txt
+audit_matches.json
+digisynk_matches.json
+fix_*.js
+fix_*.php
+fix_*.ps1
+rebrand*.php
+rebrand*.ps1
+refactor*.py
+refactor*.php
+scratch_*.php
+temp_*.txt
+
+# Stray generated migration placeholders in project root
+/2026_*.php
+
+# Keep canonical documentation logs that are committed as audit evidence
+!docs/**/*.log

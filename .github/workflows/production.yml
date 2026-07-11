@@ -1,0 +1,84 @@
+name: Go Live V2.0 - Production Deploy
+
+on:
+  push:
+    branches:
+      - production
+
+jobs:
+  validate_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, readline, ldap, msgpack, igbinary, redis, swoole, gd
+          coverage: none
+
+      - name: Install Dependencies
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Static Analysis
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G
+
+      - name: Unit & Integration Tests (including financial idempotency)
+        run: php artisan test --parallel
+
+  deploy:
+    needs: validate_and_test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_SERVER_IP }}
+          username: ${{ secrets.PROD_USERNAME }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /var/www/digisynk
+            
+            # 1. Maintenance Mode
+            php artisan down --render="errors::503" --secret="ops-bypass-2026"
+            
+            # 2. Pull Code
+            git pull origin production
+            
+            # 3. Dependencies
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+            
+            # 4. Backup DB Pré-Migração (Laravel Backup)
+            php artisan backup:run --only-db
+            
+            # 5. Migrations
+            php artisan migrate --force
+            
+            # 6. Cache Reset & Optimization
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # 7. Zero-Downtime Reload for Horizon & Octane/Swoole (if active)
+            php artisan horizon:terminate
+            # Se usar Octane: php artisan octane:reload
+            
+            # 8. Up
+            php artisan up
+
+  post_deploy_smoke_tests:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Smoke Tests against Live API
+        run: |
+          # Simples check de health
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" https://digisynk.com/api/health)
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "Smoke test falhou! O servidor não respondeu 200 OK no Health Check."
+            exit 1
+          fi
+          echo "Plataforma Online e Saudável."

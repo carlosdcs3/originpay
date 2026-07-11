@@ -1,0 +1,14 @@
+/* Sheaf UI theme bridge for the current Tailwind 3 build. */
+:root {
+    --color-primary: #f97316;
+    --color-primary-content: #ea580c;
+    --color-primary-fg: #111827;
+    --radius-field: 0.75rem;
+    --radius-box: 1rem;
+}
+
+.dark {
+    --color-primary: #fb923c;
+    --color-primary-content: #fdba74;
+    --color-primary-fg: #111827;
+}

@@ -1,0 +1,46 @@
+{
+    "charges_spike": {
+        "expected_tps_min": 100,
+        "expected_p95_max": 500,
+        "expected_p99_max": 1000,
+        "max_error_rate": 0.01,
+        "tolerances": {
+            "tps_drop_max_pct": 10,
+            "p95_increase_max_pct": 20,
+            "p99_increase_max_pct": 20
+        }
+    },
+    "charges_stress": {
+        "expected_tps_min": 50,
+        "expected_p95_max": 500,
+        "expected_p99_max": 1000,
+        "max_error_rate": 0.01,
+        "tolerances": {
+            "tps_drop_max_pct": 10,
+            "p95_increase_max_pct": 20,
+            "p99_increase_max_pct": 20
+        }
+    },
+    "wallet_mix": {
+        "expected_tps_min": 150,
+        "expected_p95_max": 400,
+        "expected_p99_max": 800,
+        "max_error_rate": 0.01,
+        "tolerances": {
+            "tps_drop_max_pct": 10,
+            "p95_increase_max_pct": 20,
+            "p99_increase_max_pct": 20
+        }
+    },
+    "soak_mixed": {
+        "expected_tps_min": 30,
+        "expected_p95_max": 500,
+        "expected_p99_max": 1000,
+        "max_error_rate": 0.001,
+        "tolerances": {
+            "tps_drop_max_pct": 10,
+            "p95_increase_max_pct": 10,
+            "p99_increase_max_pct": 10
+        }
+    }
+}

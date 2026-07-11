@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\DomainDnsRecord;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass DomainDnsRecordFactory extends Factory\n{\n    protected $model = DomainDnsRecord::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

@@ -1,0 +1,210 @@
+[
+  {
+    "relative": "alerts_definition.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "audit/R2-webhooks-dlq-idempotency.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "audit/R2.5-gateway-architecture.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "audit/R3-wallet-ledger-financial-invariants.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "audit/R3.1-context-runtime-validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "boletos-audit.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "checkout-production-review.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "customer-subscriptions-final-report.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "customer-subscriptions-mvp.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "dashboards_proposal.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "deploy/deploy_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "design-system.md",
+    "action": "conflict_preserved_at_../docs/audit/core-docs-conflicts/design-system.md"
+  },
+  {
+    "relative": "disaster_recovery/backup_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "finance-architecture.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/chaos_engineering.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/disaster_recovery.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/financial_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/go_live_certificate.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/observability_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/performance_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/relatorio_final_v2.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/security_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "go-live/soak_testing.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "observability/observability_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "operational_playbook.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "originpay-architecture-blueprint.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "performance/performance_report.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "production/00-architecture.md",
+    "action": "conflict_preserved_at_../docs/audit/core-docs-conflicts/production/00-architecture.md"
+  },
+  {
+    "relative": "production/09-gateway-architecture.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "README.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "refactors/fees-pilot-validation.log",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "refactors/fees-pilot.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "refactors/modular-pilot-comparison.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "refactors/webhooks-pilot-validation.log",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "refactors/webhooks-pilot.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "repository-cleanup-audit.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/01-gateway-offline.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/02-redis-indisponivel.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/03-horizon-parado.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/04-banco-lento.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/05-dlq-crescente.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/06-backup-restore.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/07-circuit-breaker.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/08-financial-maintenance.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/restore_database.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/restore_full.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "runbooks/restore_redis.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "security/dependency_audit.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "security/sbom.json",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "security/security_validation.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "sre/chaos_playbooks.md",
+    "action": "moved_to_root_docs"
+  },
+  {
+    "relative": "sre/disaster_recovery_guide.md",
+    "action": "moved_to_root_docs"
+  }
+]

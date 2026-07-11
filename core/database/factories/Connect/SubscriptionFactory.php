@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\Subscription;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass SubscriptionFactory extends Factory\n{\n    protected $model = Subscription::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

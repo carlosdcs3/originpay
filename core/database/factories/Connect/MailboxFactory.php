@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\Mailbox;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass MailboxFactory extends Factory\n{\n    protected $model = Mailbox::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

@@ -1,0 +1,53 @@
+{
+    "project_hash": "5f31ce83-1911-4261-aa34-9deeb2cbfa51",
+    "components": {
+        "button": {
+            "installationTime": 1783359206
+        },
+        "icon": {
+            "installationTime": 1783359207
+        },
+        "card": {
+            "installationTime": 1783359207
+        },
+        "badge": {
+            "installationTime": 1783359208
+        },
+        "tabs": {
+            "installationTime": 1783359209
+        },
+        "accordion": {
+            "installationTime": 1783359210
+        },
+        "dropdown": {
+            "installationTime": 1783359211
+        },
+        "input": {
+            "installationTime": 1783359211
+        },
+        "tooltip": {
+            "installationTime": 1783359212
+        },
+        "modal": {
+            "installationTime": 1783359213
+        },
+        "separator": {
+            "installationTime": 1783359214
+        },
+        "heading": {
+            "installationTime": 1783359214
+        },
+        "text": {
+            "installationTime": 1783359215
+        },
+        "description": {
+            "installationTime": 1783359216
+        },
+        "link": {
+            "installationTime": 1783359217
+        },
+        "kbd": {
+            "installationTime": 1783359824
+        }
+    }
+}

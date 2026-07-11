@@ -1,0 +1,1 @@
+<?php\n\nnamespace Database\\Factories\\Connect;\n\nuse App\\Models\\Connect\\Template;\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\n\nclass TemplateFactory extends Factory\n{\n    protected $model = Template::class;\n\n    public function definition()\n    {\n        return [\n            // Dummy factory definition\n        ];\n    }\n}\n

@@ -1,0 +1,9 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OriginPay">
+  <rect width="256" height="256" fill="#0B0F14"/>
+  <g fill="none" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M185.1 70.9A80 80 0 1 0 128 208" stroke="#FFFFFF" stroke-width="27"/>
+    <path d="M128 48a80 80 0 0 1 57.1 22.9" stroke="#FF7A1A" stroke-width="27"/>
+    <path d="M154 126h43" stroke="#FF7A1A" stroke-width="24"/>
+    <path d="M139 158h35" stroke="#FF7A1A" stroke-width="22"/>
+  </g>
+</svg>

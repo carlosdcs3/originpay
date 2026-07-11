@@ -1,0 +1,50 @@
+<svg width="500" height="330" viewBox="0 0 500 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OriginPay">
+
+  <defs>
+    <linearGradient id="opGradA" x1="20" y1="15" x2="145" y2="145" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A78BFA"/>
+      <stop offset=".48" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#4F1DDB"/>
+    </linearGradient>
+    <linearGradient id="opGradB" x1="140" y1="15" x2="20" y2="145" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C084FC"/>
+      <stop offset=".55" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="opGradC" x1="30" y1="135" x2="150" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5B21B6"/>
+      <stop offset=".5" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <radialGradient id="opInnerShadow" cx="50%" cy="45%" r="62%">
+      <stop offset="0" stop-color="#111827" stop-opacity=".25"/>
+      <stop offset=".75" stop-color="#020617" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#020617" stop-opacity=".92"/>
+    </radialGradient>
+    <linearGradient id="payGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A78BFA"/>
+      <stop offset=".45" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#4F1DDB"/>
+    </linearGradient>
+  </defs>
+
+<rect width="100%" height="100%" fill="#050816"/>
+
+
+    <g transform="translate(170 32) scale(1.0)">
+      <circle cx="80" cy="80" r="54" fill="none" stroke="url(#opGradA)" stroke-width="30"
+              stroke-linecap="round" stroke-dasharray="205 115" transform="rotate(22 80 80)"/>
+      <circle cx="80" cy="80" r="54" fill="none" stroke="url(#opGradB)" stroke-width="30"
+              stroke-linecap="round" stroke-dasharray="205 115" transform="rotate(142 80 80)"/>
+      <circle cx="80" cy="80" r="54" fill="none" stroke="url(#opGradC)" stroke-width="30"
+              stroke-linecap="round" stroke-dasharray="150 170" transform="rotate(262 80 80)"/>
+      <circle cx="80" cy="80" r="31" fill="url(#opInnerShadow)" opacity=".9"/>
+      <circle cx="80" cy="80" r="29" fill="#070b18"/>
+    </g>
+    
+<text x="250" y="240" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="-2">
+  <tspan fill="#FFFFFF">Origin</tspan><tspan fill="url(#payGrad)">Pay</tspan>
+</text>
+<text x="250" y="280" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="500" fill="#9CA3AF">Sua gateway, sem limites.</text>
+
+</svg>
