@@ -4,7 +4,7 @@
   "steps": {
     "install": {
       "variables": {
-        "RAILPACK_PHP_EXTENSIONS": "pcntl,posix"
+        "RAILPACK_PHP_EXTENSIONS": "pcntl,posix,pdo_pgsql,pgsql"
       }
     }
   }
