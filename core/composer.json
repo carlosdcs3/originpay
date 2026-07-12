@@ -9,6 +9,9 @@
         "ext-dom": "*",
         "ext-libxml": "*",
         "ext-pcntl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-pgsql": "*",
         "ext-zip": "*",
         "bacon/bacon-qr-code": "^3.0",
         "barryvdh/laravel-dompdf": "^3.0",
@@ -97,6 +100,9 @@
             "php": "8.3.30",
             "ext-pcntl": "8.3.30",
             "ext-posix": "8.3.30",
+            "ext-pdo": "8.3.30",
+            "ext-pdo_pgsql": "8.3.30",
+            "ext-pgsql": "8.3.30",
             "ext-zip": "8.3.30"
         },
         "platform-check": false
