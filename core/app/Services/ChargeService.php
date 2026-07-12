@@ -2,42 +2,50 @@
 
 namespace App\Services;
 
-use App\Enums\ChargeStatus;
 use App\Enums\AmountFlow;
+use App\Enums\ChargeStatus;
 use App\Enums\MethodType;
+use App\Enums\PaymentMethod;
+use App\Enums\TrxStatus;
+use App\Enums\TrxType;
+use App\Events\ChargePaidEvent;
+use App\Exceptions\GatewayBusinessException;
+use App\Exceptions\GatewayCapabilityException;
 use App\Gateway\GatewayManager;
 use App\Gateway\GatewayResolver;
 use App\Models\Charge;
-use App\Models\ChargeEvent;
 use App\Models\GatewayLog;
 use App\Models\Scopes\TenantScope;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Wallet;
 use App\Models\WalletBalance;
 use App\Services\Fees\PlatformFeeResolver;
-use App\Exceptions\GatewayCapabilityException;
+use App\Services\Fraud\FraudEngineService;
+use App\Services\PaymentLinks\PaymentLinkAnalyticsService;
 use App\Services\Security\TenantBypass;
+use App\Support\Observability\Metrics\LocalMetricsCollector;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
-use App\Enums\PaymentMethod;
-use App\Enums\TrxStatus;
-use App\Enums\TrxType;
 use Throwable;
 
 class ChargeService
 {
     protected PlatformFeeService $feeService;
+
     protected PlatformFeeResolver $platformFeeResolver;
+
     protected WalletService $walletService;
 
     public function __construct(
         PlatformFeeService $feeService,
         PlatformFeeResolver $platformFeeResolver,
         WalletService $walletService
-    )
-    {
+    ) {
         $this->feeService = $feeService;
         $this->platformFeeResolver = $platformFeeResolver;
         $this->walletService = $walletService;
@@ -48,226 +56,248 @@ class ChargeService
      */
     public function create(User $user, float $amount, string $paymentMethod, array $customerData = []): Charge
     {
-        return DB::transaction(function () use ($user, $amount, $paymentMethod, $customerData) {
-        // 0. Avaliação de Fraude (Fraud Engine)
-        /** @var \App\Services\Fraud\FraudEngineService $fraudEngine */
-        $fraudEngine = app(\App\Services\Fraud\FraudEngineService::class);
-        $riskResult = $fraudEngine->evaluateRisk($customerData, request()->ip() ?? '127.0.0.1', $user->id);
+        try {
+            $charge = DB::transaction(function () use ($user, $amount, $paymentMethod, $customerData) {
+                // 0. Avaliação de Fraude (Fraud Engine)
+                /** @var FraudEngineService $fraudEngine */
+                $fraudEngine = app(FraudEngineService::class);
+                $riskResult = $fraudEngine->evaluateRisk($customerData, request()->ip() ?? '127.0.0.1', $user->id);
 
-        if ($riskResult['is_blocked']) {
-            $reasons = implode(' ', $riskResult['reasons']);
-            throw new Exception("Transação bloqueada por risco elevado. Motivo: {$reasons}");
-        }
+                if ($riskResult['is_blocked']) {
+                    $reasons = implode(' ', $riskResult['reasons']);
+                    throw new Exception("Transação bloqueada por risco elevado. Motivo: {$reasons}");
+                }
 
-        if ($amount <= 0) {
-            throw new Exception("Amount must be greater than zero.");
-        }
+                if ($amount <= 0) {
+                    throw new Exception('Amount must be greater than zero.');
+                }
 
-        // Idempotency Check
-        if (!empty($customerData['idempotency_key'])) {
-            $existing = Charge::where('idempotency_key', $customerData['idempotency_key'])
-                ->where('user_id', $user->id)
-                ->first();
-                
-            if ($existing) {
-                return $existing;
-            }
-        }
+                // Idempotency Check
+                if (! empty($customerData['idempotency_key'])) {
+                    $existing = Charge::where('idempotency_key', $customerData['idempotency_key'])
+                        ->where('user_id', $user->id)
+                        ->first();
 
-        $legacyFees = $this->feeService->calculateFee($amount);
-        $gatewayFee = (float) ($legacyFees['gateway_fee'] ?? 0);
+                    if ($existing) {
+                        return $existing;
+                    }
+                }
 
-        $feeResult = $this->platformFeeResolver->resolve($user, $paymentMethod, $amount, 'BRL');
-        if ($feeResult->source === 'fallback') {
-            Log::warning('Using fallback platform fee rule for charge creation.', [
-                'user_id' => $user->id,
-                'payment_method' => $paymentMethod,
-                'amount' => $amount,
-            ]);
-        }
+                $legacyFees = $this->feeService->calculateFee($amount);
+                $gatewayFee = (float) ($legacyFees['gateway_fee'] ?? 0);
 
-        $platformFee = $feeResult->platformFeeAmount;
-        $netAmount = round($amount - $platformFee - $gatewayFee, 2);
+                $feeResult = $this->platformFeeResolver->resolve($user, $paymentMethod, $amount, 'BRL');
+                if ($feeResult->source === 'fallback') {
+                    Log::warning('Using fallback platform fee rule for charge creation.', [
+                        'user_id' => $user->id,
+                        'payment_method' => $paymentMethod,
+                        'amount' => $amount,
+                    ]);
+                }
 
-        if ($netAmount < 0) {
-            throw new Exception('Fee calculation resulted in negative net amount.');
-        }
+                $platformFee = $feeResult->platformFeeAmount;
+                $netAmount = round($amount - $platformFee - $gatewayFee, 2);
 
-        $wallet = $this->walletService->getDefaultWalletByUserId($user->id);
+                if ($netAmount < 0) {
+                    throw new Exception('Fee calculation resulted in negative net amount.');
+                }
 
-        $charge = new Charge([
-            'uuid' => Str::uuid()->toString(),
-            'correlation_id' => Str::uuid()->toString(),
-            'idempotency_key' => $customerData['idempotency_key'] ?? Str::uuid()->toString(),
-            'user_id' => $user->id,
-            'wallet_id' => $wallet ? $wallet->id : null,
-            'currency_id' => $wallet ? $wallet->currency_id : null,
-            'payment_method' => $paymentMethod,
-            'amount' => $amount,
-            'platform_fee' => $platformFee,
-            'gateway_fee' => $gatewayFee,
-            'fee_rule_id' => $feeResult->ruleId,
-            'fee_snapshot' => $feeResult->snapshot + [
-                'gateway_fee' => $gatewayFee,
-                'charge_net_amount' => $netAmount,
-            ],
-            'net_amount' => $netAmount,
-            'description' => $customerData['description'] ?? null,
-            'customer_name' => $customerData['name'] ?? null,
-            'customer_email' => $customerData['email'] ?? null,
-            'customer_document' => $customerData['document'] ?? null,
-            'status' => ChargeStatus::PENDING,
-            'expires_at' => now()->addDays(3),
-        ]);
+                $wallet = $this->walletService->getDefaultWalletByUserId($user->id);
 
-        // Persiste a cobrança antes de chamar o PSP (para ter ID disponível nos logs)
-        $charge->save();
+                $charge = new Charge([
+                    'uuid' => Str::uuid()->toString(),
+                    'correlation_id' => Str::uuid()->toString(),
+                    'idempotency_key' => $customerData['idempotency_key'] ?? Str::uuid()->toString(),
+                    'user_id' => $user->id,
+                    'wallet_id' => $wallet ? $wallet->id : null,
+                    'currency_id' => $wallet ? $wallet->currency_id : null,
+                    'payment_method' => $paymentMethod,
+                    'amount' => $amount,
+                    'platform_fee' => $platformFee,
+                    'gateway_fee' => $gatewayFee,
+                    'fee_rule_id' => $feeResult->ruleId,
+                    'fee_snapshot' => $feeResult->snapshot + [
+                        'gateway_fee' => $gatewayFee,
+                        'charge_net_amount' => $netAmount,
+                    ],
+                    'net_amount' => $netAmount,
+                    'description' => $customerData['description'] ?? null,
+                    'customer_name' => $customerData['name'] ?? null,
+                    'customer_email' => $customerData['email'] ?? null,
+                    'customer_document' => $customerData['document'] ?? null,
+                    'status' => ChargeStatus::PENDING,
+                    'expires_at' => now()->addDays(3),
+                ]);
 
-        $pmEnum = match ($paymentMethod) {
-            'pix' => PaymentMethod::PIX,
-            'card' => PaymentMethod::CARD,
-            'boleto' => PaymentMethod::BOLETO,
-            'crypto' => PaymentMethod::CRYPTO,
-            default => throw new Exception("Método de pagamento inválido: {$paymentMethod}")
-        };
-        $gateways = GatewayResolver::resolveAllForCharge($user, $pmEnum);
+                // Persiste a cobrança antes de chamar o PSP (para ter ID disponível nos logs)
+                $charge->save();
 
-        $lastException = null;
-        $success = false;
-        $attempt = 0;
+                $pmEnum = match ($paymentMethod) {
+                    'pix' => PaymentMethod::PIX,
+                    'card' => PaymentMethod::CARD,
+                    'boleto' => PaymentMethod::BOLETO,
+                    'crypto' => PaymentMethod::CRYPTO,
+                    default => throw new Exception("Método de pagamento inválido: {$paymentMethod}")
+                };
+                $gateways = GatewayResolver::resolveAllForCharge($user, $pmEnum);
 
-        /** @var \App\Services\CircuitBreakerService $circuitBreaker */
-        $circuitBreaker = app(\App\Services\CircuitBreakerService::class);
+                $lastException = null;
+                $success = false;
+                $attempt = 0;
 
-        foreach ($gateways as $gatewayModel) {
-            $attempt++;
-            $chainPosition = $attempt === 1 ? 'primary' : "fallback_" . ($attempt - 1);
+                /** @var CircuitBreakerService $circuitBreaker */
+                $circuitBreaker = app(CircuitBreakerService::class);
 
-            // Verifica permissão do Circuit Breaker (Trata HALF_OPEN max 3 reqs)
-            if (!$circuitBreaker->attemptRequest($gatewayModel->code)) {
-                $lastException = new Exception("Circuit Breaker limitou a tentativa.");
-                continue;
-            }
+                foreach ($gateways as $gatewayModel) {
+                    $attempt++;
+                    $chainPosition = $attempt === 1 ? 'primary' : 'fallback_'.($attempt - 1);
 
-            $metricsService = app(\App\Services\GatewayMetricsService::class);
-            $concurrencyKey = 'gateway:concurrency:' . $gatewayModel->code;
-            $concurrencyLimit = 30; // Pode vir do $gatewayModel futuramente
+                    // Verifica permissão do Circuit Breaker (Trata HALF_OPEN max 3 reqs)
+                    if (! $circuitBreaker->attemptRequest($gatewayModel->code)) {
+                        $lastException = new Exception('Circuit Breaker limitou a tentativa.');
 
-            try {
-                $executeGatewayCharge = function () use ($gatewayModel, $charge, $circuitBreaker, $metricsService, $chainPosition, $pmEnum) {
-                    $metricsService->increment('gateway_concurrency_acquired');
+                        continue;
+                    }
 
-                    $adapter = GatewayManager::adapter($gatewayModel);
-                    $charge->gateway_id = $gatewayModel->id;
+                    $metricsService = app(GatewayMetricsService::class);
+                    $concurrencyKey = 'gateway:concurrency:'.$gatewayModel->code;
+                    $concurrencyLimit = 30; // Pode vir do $gatewayModel futuramente
 
-                    $startTime = microtime(true);
-                    if ($pmEnum === PaymentMethod::BOLETO) {
-                        if (! $adapter->supportsBoleto()) {
-                            throw new GatewayCapabilityException("Gateway {$gatewayModel->code} nao suporta boleto.");
+                    try {
+                        $executeGatewayCharge = function () use ($gatewayModel, $charge, $circuitBreaker, $metricsService, $chainPosition, $pmEnum) {
+                            $metricsService->increment('gateway_concurrency_acquired');
+
+                            $adapter = GatewayManager::adapter($gatewayModel);
+                            $charge->gateway_id = $gatewayModel->id;
+
+                            $startTime = microtime(true);
+                            if ($pmEnum === PaymentMethod::BOLETO) {
+                                if (! $adapter->supportsBoleto()) {
+                                    throw new GatewayCapabilityException("Gateway {$gatewayModel->code} nao suporta boleto.");
+                                }
+
+                                $response = $adapter->createBoleto($charge);
+                            } else {
+                                $response = $adapter->createCharge($charge);
+                            }
+                            $execTime = (int) round((microtime(true) - $startTime) * 1000);
+
+                            if (is_array($response)) {
+                                $charge->gateway_charge_id = $response['gateway_charge_id'] ?? $charge->gateway_charge_id;
+                                $charge->gateway_reference = $response['gateway_reference'] ?? $charge->gateway_reference;
+                                $charge->payment_link = $response['payment_link'] ?? $charge->payment_link;
+                                $charge->boleto_url = $response['boleto_url'] ?? $charge->boleto_url;
+                                $charge->boleto_pdf_url = $response['boleto_pdf_url'] ?? $charge->boleto_pdf_url;
+                                $charge->barcode = $response['barcode'] ?? $charge->barcode;
+                                $charge->digitable_line = $response['digitable_line'] ?? $charge->digitable_line;
+                                $charge->qr_code = $response['qr_code'] ?? $charge->qr_code;
+                                $charge->pix_copy_paste = $response['pix_copy_paste'] ?? $charge->pix_copy_paste;
+                            }
+
+                            GatewayLog::logEvent(
+                                $gatewayModel->code,
+                                ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
+                                ['status' => 'success', 'gateway_charge_id' => $charge->gateway_charge_id],
+                                200, $execTime, $charge->uuid
+                            );
+
+                            $circuitBreaker->recordSuccess($gatewayModel->code);
+
+                            return true;
+                        };
+
+                        try {
+                            $redisLimiter = Redis::funnel($concurrencyKey)->limit($concurrencyLimit);
+                            $result = $redisLimiter->then($executeGatewayCharge, function () use ($metricsService) {
+                                $metricsService->increment('gateway_concurrency_rejected');
+
+                                return false; // Lock limit reached
+                            });
+                        } catch (Throwable $redisException) {
+                            Log::warning('Redis concurrency lock unavailable; processing charge without funnel.', [
+                                'gateway' => $gatewayModel->code,
+                                'charge_uuid' => $charge->uuid,
+                                'reason' => $redisException->getMessage(),
+                            ]);
+
+                            $result = $executeGatewayCharge();
                         }
 
-                        $response = $adapter->createBoleto($charge);
-                    } else {
-                        $response = $adapter->createCharge($charge);
+                        if ($result === false) {
+                            // Limit reached, try fallback
+                            $lastException = new Exception('Rate limit / Concurrency lock reached.');
+                            GatewayLog::logEvent(
+                                $gatewayModel->code,
+                                ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
+                                ['status' => 'error', 'message' => 'Concurrency limit reached.', 'fallback_triggered' => true],
+                                429, null, $charge->uuid
+                            );
+
+                            continue;
+                        }
+
+                        $success = true;
+                        break; // Funcinou, sai do loop de fallback
+
+                    } catch (GatewayBusinessException $e) {
+                        // Erro de negócio: payload inválido, documento recusado, KYC, etc. Não deve ter fallback.
+                        GatewayLog::logEvent(
+                            $gatewayModel->code,
+                            ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
+                            ['status' => 'error', 'message' => $e->getMessage(), 'error_type' => 'business_error', 'fallback_triggered' => false],
+                            400, null, $charge->uuid
+                        );
+
+                        $charge->delete();
+                        throw $e;
+                    } catch (Throwable $e) {
+                        $lastException = $e;
+                        $exceptionForCircuit = $e instanceof Exception
+                            ? $e
+                            : new Exception($e->getMessage(), 0, $e);
+
+                        GatewayLog::logEvent(
+                            $gatewayModel->code,
+                            ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
+                            ['status' => 'error', 'message' => $e->getMessage(), 'error_type' => 'operational_error', 'fallback_triggered' => true],
+                            500, null, $charge->uuid
+                        );
+
+                        $circuitBreaker->recordFailure($gatewayModel->code, $exceptionForCircuit);
+
+                        // Tenta o próximo provider (Fallback)
+                        continue;
                     }
-                    $execTime = (int) round((microtime(true) - $startTime) * 1000);
-
-                    if (is_array($response)) {
-                        $charge->gateway_charge_id = $response['gateway_charge_id'] ?? $charge->gateway_charge_id;
-                        $charge->gateway_reference = $response['gateway_reference'] ?? $charge->gateway_reference;
-                        $charge->payment_link = $response['payment_link'] ?? $charge->payment_link;
-                        $charge->boleto_url = $response['boleto_url'] ?? $charge->boleto_url;
-                        $charge->boleto_pdf_url = $response['boleto_pdf_url'] ?? $charge->boleto_pdf_url;
-                        $charge->barcode = $response['barcode'] ?? $charge->barcode;
-                        $charge->digitable_line = $response['digitable_line'] ?? $charge->digitable_line;
-                        $charge->qr_code = $response['qr_code'] ?? $charge->qr_code;
-                        $charge->pix_copy_paste = $response['pix_copy_paste'] ?? $charge->pix_copy_paste;
-                    }
-
-                    \App\Models\GatewayLog::logEvent(
-                        $gatewayModel->code,
-                        ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
-                        ['status' => 'success', 'gateway_charge_id' => $charge->gateway_charge_id],
-                        200, $execTime, $charge->uuid
-                    );
-
-                    $circuitBreaker->recordSuccess($gatewayModel->code);
-                    return true;
-                };
-
-                try {
-                    $redisLimiter = \Illuminate\Support\Facades\Redis::funnel($concurrencyKey)->limit($concurrencyLimit);
-                    $result = $redisLimiter->then($executeGatewayCharge, function () use ($metricsService) {
-                        $metricsService->increment('gateway_concurrency_rejected');
-                        return false; // Lock limit reached
-                    });
-                } catch (Throwable $redisException) {
-                    Log::warning('Redis concurrency lock unavailable; processing charge without funnel.', [
-                        'gateway' => $gatewayModel->code,
-                        'charge_uuid' => $charge->uuid,
-                        'reason' => $redisException->getMessage(),
-                    ]);
-
-                    $result = $executeGatewayCharge();
                 }
 
-                if ($result === false) {
-                    // Limit reached, try fallback
-                    $lastException = new Exception("Rate limit / Concurrency lock reached.");
-                    \App\Models\GatewayLog::logEvent(
-                        $gatewayModel->code,
-                        ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
-                        ['status' => 'error', 'message' => 'Concurrency limit reached.', 'fallback_triggered' => true],
-                        429, null, $charge->uuid
-                    );
-                    continue;
+                if (! $success) {
+                    // Reverte o registro criado no banco, pois nenhum PSP aceitou
+                    $charge->delete();
+                    throw new Exception('Falha ao criar cobrança. Todos os adquirentes falharam. Último erro: '.($lastException ? $lastException->getMessage() : 'Desconhecido'));
                 }
 
-                $success = true;
-                break; // Funcinou, sai do loop de fallback
+                $charge->status = ChargeStatus::WAITING_PAYMENT;
+                $charge->save();
 
-            } catch (\App\Exceptions\GatewayBusinessException $e) {
-                // Erro de negócio: payload inválido, documento recusado, KYC, etc. Não deve ter fallback.
-                \App\Models\GatewayLog::logEvent(
-                    $gatewayModel->code,
-                    ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
-                    ['status' => 'error', 'message' => $e->getMessage(), 'error_type' => 'business_error', 'fallback_triggered' => false],
-                    400, null, $charge->uuid
-                );
-                
-                $charge->delete();
-                throw $e;
-            } catch (Throwable $e) {
-                $lastException = $e;
-                $exceptionForCircuit = $e instanceof Exception
-                    ? $e
-                    : new Exception($e->getMessage(), 0, $e);
+                return $charge;
+            });
+            $this->recordChargeCreationMetric('success');
 
-                \App\Models\GatewayLog::logEvent(
-                    $gatewayModel->code,
-                    ['action' => 'createCharge', 'charge_uuid' => $charge->uuid, 'chain_position' => $chainPosition],
-                    ['status' => 'error', 'message' => $e->getMessage(), 'error_type' => 'operational_error', 'fallback_triggered' => true],
-                    500, null, $charge->uuid
-                );
-                
-                $circuitBreaker->recordFailure($gatewayModel->code, $exceptionForCircuit);
+            return $charge;
+        } catch (Throwable $exception) {
+            $this->recordChargeCreationMetric('failure');
 
-                // Tenta o próximo provider (Fallback)
-                continue;
-            }
+            throw $exception;
         }
+    }
 
-        if (!$success) {
-            // Reverte o registro criado no banco, pois nenhum PSP aceitou
-            $charge->delete();
-            throw new Exception("Falha ao criar cobrança. Todos os adquirentes falharam. Último erro: " . ($lastException ? $lastException->getMessage() : 'Desconhecido'));
+    private function recordChargeCreationMetric(string $result): void
+    {
+        try {
+            app(LocalMetricsCollector::class)->recordFinancialEvent('charge_creation', 'configured', $result);
+        } catch (Throwable) {
+            // Metrics must never affect charge creation.
         }
-
-        $charge->status = ChargeStatus::WAITING_PAYMENT;
-        $charge->save();
-
-        return $charge;
-        });
     }
 
     /**
@@ -294,7 +324,7 @@ class ChargeService
                 'updated_at' => now(),
             ]);
 
-            if (!$inserted) {
+            if (! $inserted) {
                 // Event already exists (handled by unique constraint)
                 return;
             }
@@ -304,15 +334,14 @@ class ChargeService
             $lockedCharge->save();
 
             // Track conversion for Payment Links
-            app(\App\Services\PaymentLinks\PaymentLinkAnalyticsService::class)->markConverted($lockedCharge);
-
+            app(PaymentLinkAnalyticsService::class)->markConverted($lockedCharge);
 
             // Credit amount to user's wallet and debit fee explicitly
-            $wallet = $lockedCharge->wallet_id 
-                ? \App\Models\Wallet::withoutGlobalScope(\App\Models\Scopes\TenantScope::class)->find($lockedCharge->wallet_id)
-                : \App\Models\Wallet::withoutGlobalScope(\App\Models\Scopes\TenantScope::class)->where('user_id', $lockedCharge->user_id)->first();
-                
-            if (!$wallet) {
+            $wallet = $lockedCharge->wallet_id
+                ? Wallet::withoutGlobalScope(TenantScope::class)->find($lockedCharge->wallet_id)
+                : Wallet::withoutGlobalScope(TenantScope::class)->where('user_id', $lockedCharge->user_id)->first();
+
+            if (! $wallet) {
                 throw new Exception("Wallet not found for user {$lockedCharge->user_id} and charge {$lockedCharge->uuid}");
             }
             if ($wallet) {
@@ -332,7 +361,7 @@ class ChargeService
                 }
 
                 $wallet = TenantBypass::run(
-                    fn () => \App\Models\Wallet::withoutGlobalScope(TenantScope::class)
+                    fn () => Wallet::withoutGlobalScope(TenantScope::class)
                         ->where('id', $wallet->id)
                         ->lockForUpdate()
                         ->firstOrFail()
@@ -407,7 +436,7 @@ class ChargeService
         // Recarregamos a cobrança para garantir que está com o status atualizado
         $charge->refresh();
         if ($charge->status === ChargeStatus::PAID) {
-            \Illuminate\Support\Facades\Event::dispatch(new \App\Events\ChargePaidEvent($charge, (float) $charge->amount));
+            Event::dispatch(new ChargePaidEvent($charge, (float) $charge->amount));
         }
     }
 
@@ -417,11 +446,11 @@ class ChargeService
     public function cancel(Charge $charge, GatewayAdapter $gatewayAdapter): void
     {
         if ($charge->status === ChargeStatus::PAID) {
-            throw new Exception("Cannot cancel a paid charge.");
+            throw new Exception('Cannot cancel a paid charge.');
         }
 
         $gatewayAdapter->cancelCharge($charge);
-        
+
         $charge->status = ChargeStatus::CANCELLED;
         $charge->save();
     }
@@ -448,19 +477,19 @@ class ChargeService
             $lockedCharge = Charge::where('id', $charge->id)->lockForUpdate()->first();
 
             if ($lockedCharge->status !== ChargeStatus::PAID) {
-                throw new Exception("Only paid charges can be refunded.");
+                throw new Exception('Only paid charges can be refunded.');
             }
 
             $gatewayAdapter->refund($lockedCharge);
-            
+
             $lockedCharge->status = ChargeStatus::REFUNDED;
             $lockedCharge->save();
 
             // Debit user's wallet
-            $wallet = $lockedCharge->wallet_id 
-                ? \App\Models\Wallet::find($lockedCharge->wallet_id)
+            $wallet = $lockedCharge->wallet_id
+                ? Wallet::find($lockedCharge->wallet_id)
                 : $this->walletService->getDefaultWalletByUserId($lockedCharge->user_id);
-                
+
             if ($wallet) {
                 // Allows negative balance implicitly if handled by debitAvailable (but debitAvailable throws Exception if not enough)
                 // Wait, debitAvailable throws exception if balance < amount. In gateways, refund can negative balance.
@@ -470,5 +499,3 @@ class ChargeService
         });
     }
 }
-
-

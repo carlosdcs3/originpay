@@ -6,29 +6,33 @@
 **/.env.*
 !**/.env.example
 
-# Local credentials / certificates / private keys
+# Credentials, certificates and private keys
 **/*.pem
 **/*.key
 **/*.p12
 **/*.pfx
 **/*.crt
 **/*.cer
+**/*.jks
+**/*.keystore
 **/id_rsa*
 **/id_ed25519*
+auth.json
+**/auth.json
 
 # PHP / Composer
 **/vendor/
 composer.phar
-.phpunit.result.cache
-.phpunit.cache/
-.php-cs-fixer.cache
-.phpstan.cache/
-.phpstan/
-.phpunit.cache
+**/.phpunit.result.cache
+**/.phpunit.cache/
+**/.php-cs-fixer.cache
+**/.phpstan.cache/
+**/.phpstan/
 
-# Laravel
+# Laravel runtime
 **/bootstrap/cache/*.php
 **/storage/*.key
+**/storage/app/private/
 **/storage/framework/cache/
 **/storage/framework/sessions/
 **/storage/framework/testing/
@@ -37,15 +41,18 @@ composer.phar
 **/storage/debugbar/
 **/public/storage
 
-# Databases and dumps
+# Databases, dumps and local data
 **/*.sqlite
 **/*.sqlite3
 **/*.db
+**/*.db-shm
+**/*.db-wal
 **/*.sql
 **/*.dump
 **/*.bak
+**/*.backup
 
-# JavaScript
+# JavaScript package managers
 **/node_modules/
 **/npm-debug.log*
 **/yarn-debug.log*
@@ -55,29 +62,49 @@ composer.phar
 **/.yarn/cache/
 **/.pnpm-store/
 
-# Frontend builds
+# Generated frontend artifacts
 **/dist/
 **/build/
+**/public/build/
+**/public/hot
 **/.next/
 **/.nuxt/
 **/.vite/
-**/coverage/
 
-# IDE / local agent tooling
-.idea/
-.vscode/
+# Coverage, tests and analysis artifacts
+**/coverage/
+**/coverage-html/
+**/.pest-cache/
+**/.temp/test-results
+**/junit.xml
+**/clover.xml
+**/coverage.xml
+**/test-results/
+**/playwright-report/
+**/cypress/screenshots/
+**/cypress/videos/
+
+# IDE and local tooling
+**/.idea/
+**/.vscode/
+**/.fleet/
 *.code-workspace
 .agents/
 .claude/
 .codex/
 .codex-remote-attachments/
+.cursor/
 .impeccable/
 .hermes/
 
-# OS
+# Operating systems
 .DS_Store
+**/.DS_Store
 Thumbs.db
+**/Thumbs.db
 desktop.ini
+**/desktop.ini
+$RECYCLE.BIN/
 
 # Temporary files
 *.tmp
@@ -86,17 +113,13 @@ desktop.ini
 *.swo
 *.orig
 *.rej
+*.old
 *~
+**/tmp/
+**/temp/
+**/scratch/
 
-# Test and analysis artifacts
-**/.phpunit.cache/
-**/.pest-cache/
-**/junit.xml
-**/clover.xml
-**/coverage.xml
-**/coverage-html/
-
-# Local archives, backups, generated reports and scratch scripts
+# Local archives, backups and cleanup material
 backups/
 storage/
 core/_archive_legacy_review/
@@ -124,5 +147,5 @@ temp_*.txt
 # Stray generated migration placeholders in project root
 /2026_*.php
 
-# Keep canonical documentation logs that are committed as audit evidence
-!docs/**/*.log
+# Operational audit output remains local; publish written summaries instead
+**/*.log

@@ -2,28 +2,42 @@
 
 namespace App\Jobs;
 
+use App\Enums\ChargeStatus;
+use App\Enums\WebhookEventStatus;
+use App\Gateway\GatewayManager;
+use App\Models\Charge;
+use App\Models\GatewayLog;
+use App\Models\PaymentGateway;
+use App\Models\WebhookDeadLetter;
+use App\Models\WebhookEvent;
+use App\Services\ChargeService;
+use App\Support\Observability\CarriesOperationalContext;
+use App\Support\Observability\Metrics\LocalMetricsCollector;
+use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Http\Request;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Http\Request;
-use App\Models\PaymentGateway;
-use App\Gateway\GatewayManager;
-use App\Services\ChargeService;
-use Exception;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ProcessGatewayWebhookJob implements ShouldQueue
 {
+    use CarriesOperationalContext;
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $backoff = [10, 30, 60]; // Retry after 10s, then 30s, then 60s
 
     protected string $provider;
+
     protected array $payload;
+
     protected array $headers;
+
     protected ?int $webhookEventId;
 
     /**
@@ -35,8 +49,15 @@ class ProcessGatewayWebhookJob implements ShouldQueue
     {
         $this->provider = $provider;
         $this->payload = $payload;
-        $this->headers = $headers;
+        $this->headers = $this->safeHeaders($headers);
         $this->webhookEventId = $webhookEventId;
+        $this->captureOperationalContext([
+            'gateway' => $provider,
+            'webhook_event_id' => $webhookEventId,
+            'payment_id' => $payload['payment_id'] ?? $payload['charge_id'] ?? null,
+            'merchant_id' => $payload['merchant_id'] ?? null,
+            'tenant_id' => $payload['tenant_id'] ?? null,
+        ]);
     }
 
     /**
@@ -46,19 +67,21 @@ class ProcessGatewayWebhookJob implements ShouldQueue
      */
     public function handle(ChargeService $chargeService)
     {
-        $webhookEvent = $this->webhookEventId ? \App\Models\WebhookEvent::find($this->webhookEventId) : null;
+        $startedAt = hrtime(true);
+        $webhookEvent = $this->webhookEventId ? WebhookEvent::find($this->webhookEventId) : null;
 
-        if ($webhookEvent && $webhookEvent->status === \App\Enums\WebhookEventStatus::PROCESSED) {
+        if ($webhookEvent && $webhookEvent->status === WebhookEventStatus::PROCESSED) {
             Log::info('Gateway webhook job skipped already processed event', [
                 'webhook_event_id' => $webhookEvent->id,
                 'event_id' => $webhookEvent->event_id,
             ]);
+
             return;
         }
 
         if ($webhookEvent) {
             $webhookEvent->update([
-                'status' => \App\Enums\WebhookEventStatus::PROCESSING,
+                'status' => WebhookEventStatus::PROCESSING,
                 'attempts' => ((int) $webhookEvent->attempts) + 1,
                 'last_error' => null,
             ]);
@@ -66,14 +89,14 @@ class ProcessGatewayWebhookJob implements ShouldQueue
 
         $gatewayModel = PaymentGateway::where('code', $this->provider)->first();
 
-        if (!$gatewayModel) {
+        if (! $gatewayModel) {
             throw new Exception("Provider not found: {$this->provider}");
         }
 
         // Recreate the Request object
         $request = Request::create(
-            '/api/webhooks/gateway/' . $this->provider, 
-            'POST', 
+            '/api/webhooks/gateway/'.$this->provider,
+            'POST',
             $this->payload
         );
         foreach ($this->headers as $key => $values) {
@@ -81,55 +104,78 @@ class ProcessGatewayWebhookJob implements ShouldQueue
         }
 
         $adapter = GatewayManager::adapter($gatewayModel);
-        
+
         // Let the adapter normalize the webhook
         $normalizedEvent = $adapter->handleWebhook($request);
 
-        if ($normalizedEvent->status === \App\Enums\ChargeStatus::PAID) {
+        if ($normalizedEvent->status === ChargeStatus::PAID) {
             $charge = $this->findCharge($normalizedEvent->gatewayChargeId);
             if ($charge) {
-                $chargeService->markAsPaid($charge, $normalizedEvent->gatewayEventId ?? 'webhook_' . \Illuminate\Support\Str::random(10));
+                $chargeService->markAsPaid($charge, $normalizedEvent->gatewayEventId ?? 'webhook_'.Str::random(10));
             }
-        } elseif ($normalizedEvent->status === \App\Enums\ChargeStatus::EXPIRED) {
+        } elseif ($normalizedEvent->status === ChargeStatus::EXPIRED) {
             $charge = $this->findCharge($normalizedEvent->gatewayChargeId);
             if ($charge) {
                 $chargeService->expire($charge);
             }
-        } elseif ($normalizedEvent->status === \App\Enums\ChargeStatus::CANCELLED) {
+        } elseif ($normalizedEvent->status === ChargeStatus::CANCELLED) {
             $charge = $this->findCharge($normalizedEvent->gatewayChargeId);
-            if ($charge && $charge->status !== \App\Enums\ChargeStatus::PAID) {
-                $charge->status = \App\Enums\ChargeStatus::CANCELLED;
+            if ($charge && $charge->status !== ChargeStatus::PAID) {
+                $charge->status = ChargeStatus::CANCELLED;
                 $charge->save();
             }
         }
 
-        \App\Models\GatewayLog::logEvent(
-            $this->provider, 
-            ['action' => 'webhook_received', 'payload' => $this->payload], 
+        GatewayLog::logEvent(
+            $this->provider,
+            ['action' => 'webhook_received', 'payload' => $this->payload],
             ['status' => 'processed', 'normalized_status' => $normalizedEvent->status->value],
-            200, 
-            null, 
+            200,
+            null,
             $normalizedEvent->gatewayEventId
         );
 
         if ($webhookEvent) {
             $webhookEvent->update([
-                'status' => \App\Enums\WebhookEventStatus::PROCESSED,
+                'status' => WebhookEventStatus::PROCESSED,
                 'processed_at' => now(),
                 'last_error' => null,
             ]);
 
-            \App\Models\WebhookDeadLetter::where('webhook_event_id', $webhookEvent->id)
+            WebhookDeadLetter::where('webhook_event_id', $webhookEvent->id)
                 ->whereIn('status', ['pending', 'failed', 'reprocessing'])
                 ->update(['status' => 'reprocessed']);
         }
+
+        $labels = ['operation' => 'webhook_processing', 'gateway' => $this->provider, 'result' => 'success'];
+        $this->recordMetrics($labels, $startedAt);
     }
 
-    private function findCharge(string $gatewayReference): ?\App\Models\Charge
+    private function findCharge(string $gatewayReference): ?Charge
     {
-        return \App\Models\Charge::where('gateway_charge_id', $gatewayReference)
+        return Charge::where('gateway_charge_id', $gatewayReference)
             ->orWhere('gateway_reference', $gatewayReference)
             ->first();
+    }
+
+    /**
+     * @param  array<string, mixed>  $headers
+     * @return array<string, mixed>
+     */
+    private function safeHeaders(array $headers): array
+    {
+        $safe = [];
+        $blocked = ['authorization', 'proxy-authorization', 'x-api-key', 'api-key', 'cookie', 'set-cookie', 'client_secret', 'client-secret'];
+
+        foreach ($headers as $key => $value) {
+            if (in_array(strtolower((string) $key), $blocked, true)) {
+                continue;
+            }
+
+            $safe[$key] = $value;
+        }
+
+        return $safe;
     }
 
     private function headerValue(array $names): ?string
@@ -152,19 +198,23 @@ class ProcessGatewayWebhookJob implements ShouldQueue
     /**
      * Handle a job failure.
      *
-     * @param  \Throwable  $exception
      * @return void
      */
     public function failed(\Throwable $exception)
     {
-        Log::error("ProcessGatewayWebhookJob failed: " . $exception->getMessage());
+        $this->recordMetrics([
+            'operation' => 'webhook_processing',
+            'gateway' => $this->provider,
+            'result' => 'failure',
+        ]);
+        Log::error('ProcessGatewayWebhookJob failed: '.$exception->getMessage());
 
-        \App\Models\GatewayLog::logEvent(
-            $this->provider, 
-            ['action' => 'webhook_failed', 'payload' => $this->payload], 
-            ['error' => $exception->getMessage()], 
-            400, 
-            null, 
+        GatewayLog::logEvent(
+            $this->provider,
+            ['action' => 'webhook_failed', 'payload' => $this->payload],
+            ['error' => $exception->getMessage()],
+            400,
+            null,
             null
         );
 
@@ -172,8 +222,8 @@ class ProcessGatewayWebhookJob implements ShouldQueue
         $timestamp = $this->headerValue(['x-webhook-timestamp', 'x-gateway-timestamp']);
 
         if ($this->webhookEventId) {
-            \App\Models\WebhookEvent::whereKey($this->webhookEventId)->update([
-                'status' => \App\Enums\WebhookEventStatus::DEAD_LETTER,
+            WebhookEvent::whereKey($this->webhookEventId)->update([
+                'status' => WebhookEventStatus::DEAD_LETTER,
                 'failed_at' => now(),
                 'last_error' => $exception->getMessage(),
             ]);
@@ -192,12 +242,26 @@ class ProcessGatewayWebhookJob implements ShouldQueue
 
         // Canonical DLQ for inbound gateway webhooks: webhook_dead_letters.
         if ($this->webhookEventId) {
-            \App\Models\WebhookDeadLetter::updateOrCreate(
+            WebhookDeadLetter::updateOrCreate(
                 ['webhook_event_id' => $this->webhookEventId],
                 $deadLetterData
             );
         } else {
-            \App\Models\WebhookDeadLetter::create($deadLetterData);
+            WebhookDeadLetter::create($deadLetterData);
+        }
+    }
+
+    /** @param array<string, string> $labels */
+    private function recordMetrics(array $labels, ?int $startedAt = null): void
+    {
+        try {
+            $metrics = app(LocalMetricsCollector::class);
+            $metrics->increment('webhook_jobs_total', $labels);
+            if ($startedAt !== null) {
+                $metrics->observe('webhook_job_duration_ms', $labels, (hrtime(true) - $startedAt) / 1_000_000);
+            }
+        } catch (\Throwable) {
+            // Metrics must never affect webhook processing.
         }
     }
 }

@@ -109,4 +109,5 @@ Route::get('/v1/status', [PublicStatusController::class, 'getStatus']);
 // Observability Health Checks
 Route::get('/health/live', [HealthCheckController::class, 'live'])->name('health.live');
 Route::get('/health/ready', [HealthCheckController::class, 'ready'])->name('health.ready');
+Route::get('/health/deep', [HealthCheckController::class, 'deep'])->name('health.deep');
 Route::post('webhooks/{gateway}', [WebhookController::class, 'handle']);

@@ -2,32 +2,69 @@
 
 namespace App\Providers;
 
+use App\Contracts\Auth\ApiCredentialRepositoryInterface;
+use App\Contracts\Metrics\OperationalMetricsServiceInterface;
+use App\Contracts\PaymentMethod\PaymentMethodRepositoryInterface;
+use App\Contracts\PaymentMethod\PaymentMethodVaultInterface;
+use App\Contracts\Payments\ChargeRepositoryInterface;
+use App\Contracts\Payments\SessionRepositoryInterface;
 use App\Database\Schema\Grammars\NonTransactionalPostgresGrammar;
 use App\Models\Charge;
 use App\Models\CustomerSubscription;
 use App\Models\Merchant;
 use App\Models\User;
-use App\Observers\ChargeSubscriptionInvoiceObserver;
-use App\Observers\CustomerSubscriptionPaymentLinkObserver;
-use App\Observers\MerchantObserver;
 use App\Modules\Fees\Application\Actions\SimulatePlatformFeeAction;
 use App\Modules\Fees\Domain\Contracts\PlatformFeeSimulator;
 use App\Modules\Webhooks\Domain\Contracts\WebhookAdminAuditRecorder;
 use App\Modules\Webhooks\Infrastructure\Persistence\EloquentWebhookAdminAuditRecorder;
+use App\Observers\ChargeSubscriptionInvoiceObserver;
+use App\Observers\CustomerSubscriptionPaymentLinkObserver;
+use App\Observers\MerchantObserver;
 use App\Observers\UserObserver;
 use App\Payment\PaymentGatewayFactory;
+use App\Repositories\Auth\EloquentApiCredentialRepository;
+use App\Repositories\PaymentMethod\MockPaymentMethodRepository;
+use App\Repositories\Payments\EloquentChargeRepository;
+use App\Repositories\Payments\MockSessionRepository;
 use App\Services\AppConfigService;
+use App\Services\CurrencyConversionService;
 use App\Services\CurrencyService;
+use App\Services\Financial\WalletBalanceService;
+use App\Services\Gateways\Adapters\Efi\EfiHttpClient;
+use App\Services\Gateways\Adapters\EfiGatewayAdapter;
+use App\Services\Gateways\Adapters\MockGatewayAdapter;
+use App\Services\Gateways\Adapters\SicoobGatewayAdapter;
+use App\Services\Gateways\GatewayManager;
+use App\Services\Gateways\GatewayRegistry;
 use App\Services\IpInfoService;
+use App\Services\Metrics\NullMetricsDriver;
+use App\Services\Payment\Contracts\BalanceProviderInterface;
+use App\Services\Payment\Providers\EfiBalanceProvider;
 use App\Services\PaymentService;
 use App\Services\QRCodeService;
 use App\Services\TransactionService;
 use App\Services\WalletService;
+use App\Support\Observability\Metrics\InMemoryMetricsStore;
+use App\Support\Observability\Metrics\LocalMetricsCollector;
+use App\Support\Observability\Metrics\MetricsStore;
+use App\Support\Observability\Metrics\NoOpMetricsStore;
+use App\Support\Observability\Metrics\RedisMetricsStore;
+use App\Support\Observability\QueueOperationalContext;
+use App\Vault\MockPaymentMethodVault;
+use App\View\Components\Icon;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -37,6 +74,40 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(MetricsStore::class, function () {
+            try {
+                $config = config('observability.metrics_baseline', []);
+                $backend = is_array($config) ? ($config['backend'] ?? 'redis') : 'invalid';
+
+                if ($backend === 'memory') {
+                    return new InMemoryMetricsStore;
+                }
+
+                if ($backend !== 'redis' || ! class_exists(\Redis::class)) {
+                    return new NoOpMetricsStore;
+                }
+
+                return new RedisMetricsStore(
+                    Redis::connection($config['redis_connection'] ?? null),
+                    max(1, (int) ($config['ttl_seconds'] ?? 7776000)),
+                    (string) ($config['redis_namespace'] ?? 'originpay:metrics'),
+                );
+            } catch (\Throwable) {
+                return new NoOpMetricsStore;
+            }
+        });
+        $this->app->singleton(LocalMetricsCollector::class, function ($app) {
+            try {
+                $config = config('observability.metrics_baseline', []);
+
+                return new LocalMetricsCollector(
+                    $app->make(MetricsStore::class),
+                    is_array($config) ? $config : [],
+                );
+            } catch (\Throwable) {
+                return new LocalMetricsCollector(new NoOpMetricsStore);
+            }
+        });
         $this->registerServices();
         $this->bindFacades();
 
@@ -51,11 +122,11 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function registerServices(): void
     {
-        $this->app->singleton(\App\Services\CurrencyConversionService::class, function ($app) {
-            return new \App\Services\CurrencyConversionService();
+        $this->app->singleton(CurrencyConversionService::class, function ($app) {
+            return new CurrencyConversionService;
         });
 
-        $this->app->bind(\App\Services\Payment\Contracts\BalanceProviderInterface::class, \App\Services\Payment\Providers\EfiBalanceProvider::class);
+        $this->app->bind(BalanceProviderInterface::class, EfiBalanceProvider::class);
         $this->app->singleton(WalletService::class, fn ($app) => new WalletService);
         $this->app->singleton(TransactionService::class, fn ($app) => new TransactionService);
         $this->app->singleton(IpInfoService::class, fn ($app) => new IpInfoService);
@@ -64,34 +135,34 @@ class AppServiceProvider extends ServiceProvider
         // Bind PaymentService with dependency injection
         $this->app->singleton(PaymentService::class, fn ($app) => new PaymentService(
             $app->make(PaymentGatewayFactory::class),
-            $app->make(\App\Services\Financial\WalletBalanceService::class)
+            $app->make(WalletBalanceService::class)
         ));
 
         // Operational Metrics Service (Phase 5.3)
-        $this->app->singleton(\App\Contracts\Metrics\OperationalMetricsServiceInterface::class, \App\Services\Metrics\NullMetricsDriver::class);
+        $this->app->singleton(OperationalMetricsServiceInterface::class, NullMetricsDriver::class);
 
         // Sprint 4 & 5 - Mock Bindings for Payment Methods and Sessions
-        $this->app->bind(\App\Contracts\PaymentMethod\PaymentMethodVaultInterface::class, \App\Vault\MockPaymentMethodVault::class);
-        $this->app->bind(\App\Contracts\PaymentMethod\PaymentMethodRepositoryInterface::class, \App\Repositories\PaymentMethod\MockPaymentMethodRepository::class);
-        $this->app->bind(\App\Contracts\Payments\SessionRepositoryInterface::class, \App\Repositories\Payments\MockSessionRepository::class);
-        $this->app->bind(\App\Contracts\Payments\ChargeRepositoryInterface::class, \App\Repositories\Payments\EloquentChargeRepository::class);
-        $this->app->bind(\App\Contracts\Auth\ApiCredentialRepositoryInterface::class, \App\Repositories\Auth\EloquentApiCredentialRepository::class);
+        $this->app->bind(PaymentMethodVaultInterface::class, MockPaymentMethodVault::class);
+        $this->app->bind(PaymentMethodRepositoryInterface::class, MockPaymentMethodRepository::class);
+        $this->app->bind(SessionRepositoryInterface::class, MockSessionRepository::class);
+        $this->app->bind(ChargeRepositoryInterface::class, EloquentChargeRepository::class);
+        $this->app->bind(ApiCredentialRepositoryInterface::class, EloquentApiCredentialRepository::class);
         $this->app->bind(PlatformFeeSimulator::class, SimulatePlatformFeeAction::class);
         $this->app->bind(WebhookAdminAuditRecorder::class, EloquentWebhookAdminAuditRecorder::class);
 
         // Sprint 6 - Mock Bindings for Auth
         // Sprint 10 - Gateway Layer
-        $this->app->singleton(\App\Services\Gateways\GatewayRegistry::class, function ($app) {
-            $registry = new \App\Services\Gateways\GatewayRegistry();
-            $registry->register('mock', new \App\Services\Gateways\Adapters\MockGatewayAdapter());
-            $registry->register('efi', new \App\Services\Gateways\Adapters\EfiGatewayAdapter($this->app->make(\App\Services\Gateways\Adapters\Efi\EfiHttpClient::class)));
-            $registry->register('sicoob', new \App\Services\Gateways\Adapters\SicoobGatewayAdapter());
-        
+        $this->app->singleton(GatewayRegistry::class, function ($app) {
+            $registry = new GatewayRegistry;
+            $registry->register('mock', new MockGatewayAdapter);
+            $registry->register('efi', new EfiGatewayAdapter($this->app->make(EfiHttpClient::class)));
+            $registry->register('sicoob', new SicoobGatewayAdapter);
+
             return $registry;
         });
 
-        $this->app->singleton(\App\Services\Gateways\GatewayManager::class, function ($app) {
-            return new \App\Services\Gateways\GatewayManager($app->make(\App\Services\Gateways\GatewayRegistry::class));
+        $this->app->singleton(GatewayManager::class, function ($app) {
+            return new GatewayManager($app->make(GatewayRegistry::class));
         });
     }
 
@@ -114,7 +185,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(AppConfigService $appConfigService): void
     {
-        Blade::component('icon', \App\View\Components\Icon::class);
+        Blade::component('icon', Icon::class);
 
         $this->ensureAppKey();
         $this->configurePostgresSchemaGrammar();
@@ -131,7 +202,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->configureObservers();
-        
+        $this->configureQueueOperationalContext();
+
         Application::macro('getDefaultLocale', function () {
             try {
                 return config('app.default_language', 'en');
@@ -141,20 +213,20 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Configuração de Rate Limiters para a API e Gateway
-        \Illuminate\Support\Facades\RateLimiter::for('api', function (\Illuminate\Http\Request $request) {
-            return \Illuminate\Cache\RateLimiting\Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
         });
 
-        \Illuminate\Support\Facades\RateLimiter::for('payments', function (\Illuminate\Http\Request $request) {
-            return \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        RateLimiter::for('payments', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
-        \Illuminate\Support\Facades\RateLimiter::for('originpay_api', function (\Illuminate\Http\Request $request) {
+        RateLimiter::for('originpay_api', function (Request $request) {
             $merchantContext = $request->attributes->get('merchant_context');
-            
+
             $id = $merchantContext ? $merchantContext->merchantId : $request->ip();
             $environment = $merchantContext ? $merchantContext->environment : 'sandbox';
-            
+
             $limit = 100; // sandbox default
             if ($environment === 'production') {
                 $limit = 500; // live
@@ -163,9 +235,36 @@ class AppServiceProvider extends ServiceProvider
                 $limit = 2000;
             }
 
-            return \Illuminate\Cache\RateLimiting\Limit::perMinute($limit)->by($id);
+            return Limit::perMinute($limit)->by($id);
         });
 
+    }
+
+    protected function configureQueueOperationalContext(): void
+    {
+        Queue::before(function (JobProcessing $event): void {
+            $payload = $event->job->payload();
+            $command = isset($payload['data']['command']) && is_string($payload['data']['command'])
+                ? @unserialize($payload['data']['command'])
+                : null;
+
+            if (is_object($command)) {
+                QueueOperationalContext::restore($command, $event->job->getQueue(), $event->job->attempts());
+            }
+        });
+
+        Queue::after(function (JobProcessed $event): void {
+            QueueOperationalContext::clear();
+        });
+
+        Queue::exceptionOccurred(function (JobExceptionOccurred $event): void {
+            Log::error('Queued job failed', [
+                'result' => 'failed',
+                'error_class' => get_class($event->exception),
+            ]);
+
+            QueueOperationalContext::clear();
+        });
     }
 
     protected function configurePostgresSchemaGrammar(): void

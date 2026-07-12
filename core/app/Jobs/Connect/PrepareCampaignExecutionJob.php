@@ -1,6 +1,17 @@
 <?php
+
 namespace App\Jobs\Connect;
 
+use App\Events\Connect\Campaign\CampaignAudienceResolved;
+use App\Events\Connect\Campaign\CampaignExecutionStarted;
+use App\Events\Connect\Campaign\CampaignRecipientsQueued;
+use App\Models\Connect\Campaign;
+use App\Models\Connect\ConnectCampaignExecution;
+use App\Models\Connect\ConnectCampaignRecipient;
+use App\Services\Connect\Campaign\CampaignAudienceResolver;
+use App\Services\Connect\CampaignQuotaService;
+use App\Services\Connect\CampaignService;
+use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -8,14 +19,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Models\Connect\ConnectCampaignExecution;
-use App\Models\Connect\ConnectCampaignRecipient;
-use App\Services\Connect\CampaignService;
-use App\Services\Connect\Campaign\CampaignAudienceResolver;
-use App\Events\Connect\Campaign\CampaignExecutionStarted;
-use App\Events\Connect\Campaign\CampaignAudienceResolved;
-use App\Events\Connect\Campaign\CampaignRecipientsQueued;
-use Exception;
 
 class PrepareCampaignExecutionJob implements ShouldQueue
 {
@@ -28,12 +31,16 @@ class PrepareCampaignExecutionJob implements ShouldQueue
         $this->campaignId = $campaignId;
     }
 
-    public function handle(CampaignService $campaignService, CampaignAudienceResolver $resolver)
+    public function handle(CampaignService $campaignService, CampaignAudienceResolver $resolver, CampaignQuotaService $quotas)
     {
         DB::beginTransaction();
 
         try {
             $campaign = $campaignService->lockAndPrepareExecution($this->campaignId);
+            $requestedRecipients = $resolver->getChunked($campaign->segment, 1000)->count();
+            if (! $quotas->allowsRecipients((int) $campaign->merchant_id, $requestedRecipients)) {
+                throw new \RuntimeException('Connect campaign quota exceeded.');
+            }
             $executionUuid = $campaign->execution_uuid;
 
             $execution = ConnectCampaignExecution::create([
@@ -54,7 +61,7 @@ class PrepareCampaignExecutionJob implements ShouldQueue
             foreach ($contactsLazy->chunk($chunkSize) as $contactsChunk) {
                 $inserts = [];
                 $now = now();
-                
+
                 foreach ($contactsChunk as $contact) {
                     $inserts[] = [
                         'uuid' => Str::uuid()->toString(),
@@ -78,31 +85,31 @@ class PrepareCampaignExecutionJob implements ShouldQueue
 
             // Update stats from DB absolute truth
             $trueCount = ConnectCampaignRecipient::where('execution_id', $execution->id)->count();
-            
+
             $execution->update([
                 'total_audience' => $trueCount,
-                'queued_count' => $trueCount
+                'queued_count' => $trueCount,
             ]);
 
             $campaign->update([
                 'estimated_audience_count' => $trueCount,
-                'status' => \App\Models\Connect\Campaign::STATUS_QUEUEING
+                'status' => Campaign::STATUS_QUEUEING,
             ]);
 
             event(new CampaignRecipientsQueued($execution));
 
             DB::commit();
-            
+
             // Priority Queues isolated by Channel
-            $queueName = 'connect_' . $campaign->channel;
+            $queueName = 'connect_'.$campaign->channel;
 
             // Dispatch Individual Jobs
             ConnectCampaignRecipient::where('execution_id', $execution->id)
                 ->where('status', ConnectCampaignRecipient::STATUS_QUEUED)
                 ->select('id')
-                ->chunkById(1000, function ($recipients) use ($queueName) {
+                ->chunkById(1000, function ($recipients) use ($queueName, $campaign) {
                     foreach ($recipients as $rec) {
-                        ProcessCampaignRecipientJob::dispatch($rec->id)->onQueue($queueName);
+                        ProcessCampaignRecipientJob::dispatch($rec->id, $campaign->merchant_id)->onQueue($queueName);
                     }
                 });
 

@@ -1,31 +1,52 @@
 <?php
+
 namespace Tests\Feature\Connect;
 
+use App\Http\Middleware\Connect\EnsureConnectEnabled;
+use App\Http\Middleware\Connect\EnsureConnectSubscriptionActive;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class AccessControlTest extends TestCase
 {
-    public function test_user_without_subscription_cannot_access_premium() { $this->assertTrue(true); }
-    public function test_user_with_active_subscription_accesses_premium() { $this->assertTrue(true); }
-    public function test_user_trialing_accesses_premium() { $this->assertTrue(true); }
-    public function test_user_canceled_cannot_access() { $this->assertTrue(true); }
-    public function test_user_suspended_cannot_access() { $this->assertTrue(true); }
-    public function test_domain_limit_blocks_second_domain() { $this->assertTrue(true); }
-    public function test_whatsapp_limit_blocks_second_number() { $this->assertTrue(true); }
-    public function test_monthly_email_limit_blocks_excess() { $this->assertTrue(true); }
-    public function test_merchant_cannot_access_other_merchant_data() { $this->assertTrue(true); }
-    public function test_transactional_emails_continue_allowed() { $this->assertTrue(true); }
-    public function test_past_due_within_grace_period_accesses() { $this->assertTrue(true); }
-    public function test_past_due_outside_grace_period_blocks() { $this->assertTrue(true); }
-    public function test_whatsapp_feature_flag_disabled_blocks_whatsapp_even_with_active_sub() { $this->assertTrue(true); }
-    public function test_connect_module_flag_disabled_blocks_everything() { $this->assertTrue(true); }
+    public function test_unauthenticated_connect_request_is_denied(): void
+    {
+        $this->get('/user/connect')->assertRedirect();
+    }
 
-    public function test_context_queries_database_only_once_per_request() { $this->assertTrue(true); }
-    public function test_concurrency_row_lock_on_usage_reset() { $this->assertTrue(true); }
-    public function test_capabilities_are_resolved_correctly_from_plan() { $this->assertTrue(true); }
-    
-    // New Epic 2.2 Tests
-    public function test_has_feature_is_o1_lookup_without_collections() { $this->assertTrue(true); }
-    public function test_addon_resolver_passthrough_works_correctly() { $this->assertTrue(true); }
-    public function test_feature_flag_resolver_passthrough_works_correctly() { $this->assertTrue(true); }
+    public function test_connect_routes_enforce_guards_server_side(): void
+    {
+        $routes = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn ($route) => str_starts_with($route->uri(), 'user/connect'));
+
+        $this->assertNotEmpty($routes);
+        foreach ($routes as $route) {
+            $middleware = $route->gatherMiddleware();
+            $this->assertContains('auth', $middleware);
+            $this->assertContains(EnsureConnectEnabled::class, $middleware);
+            $this->assertContains(EnsureConnectSubscriptionActive::class, $middleware);
+        }
+    }
+
+    public function test_mutable_stub_routes_are_unavailable_without_side_effects(): void
+    {
+        $before = collect(Route::getRoutes()->getRoutes())->count();
+
+        $this->post('/user/connect/campaigns')->assertMethodNotAllowed();
+        $this->post('/user/connect/journeys/1/publish')->assertNotFound();
+        $this->delete('/user/connect/contacts/1')->assertNotFound();
+
+        $this->assertSame($before, collect(Route::getRoutes()->getRoutes())->count());
+    }
+
+    public function test_retained_data_routes_do_not_expose_unscoped_detail_endpoints(): void
+    {
+        $uris = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn ($route) => str_starts_with($route->uri(), 'user/connect'))
+            ->pluck('uri');
+
+        $this->assertFalse($uris->contains('user/connect/contacts/{contact}'));
+        $this->assertFalse($uris->contains('user/connect/templates/{template}'));
+        $this->assertFalse($uris->contains('user/connect/campaigns/{campaign}'));
+    }
 }

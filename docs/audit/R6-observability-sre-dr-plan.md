@@ -1401,3 +1401,648 @@ Após commit/tag, o working tree deve permanecer sem alterações versionáveis 
 ### 28.8 Autorização limitada para R6
 
 Com o checkpoint Git R5.1 concluído, a OriginPay fica autorizada apenas a iniciar a implementação planejada da R6 em rodada posterior, seguindo a documentação canônica e TDD. Esta autorização não libera go-live, Release Candidate, deploy de produção, push, remote ou processamento financeiro real.
+
+## 29. R6.1 — Incremento 1: readiness fail-closed do monitor token
+
+### 29.1 Decisão arquitetural
+
+A documentação canônica exige que health checks não exponham segredos e que validações de segurança falhem fechado. A readiness anterior aceitava fallback textual `default-secret-token` quando `MONITOR_TOKEN` não estava configurado, o que criava um segredo padrão conhecido.
+
+Decisão R6.1:
+
+- Remover fallback de token padrão conhecido.
+- Exigir configuração explícita de `MONITOR_TOKEN` via `config('app.monitor_token')`.
+- Quando o token não estiver configurado, `/api/health/ready` retorna `503` com `monitor_token=ERROR`.
+- Quando o token estiver configurado e o header for inválido, retorna `401` sem vazar o valor esperado.
+- Comparação feita com `hash_equals`.
+
+### 29.2 Arquivos alterados
+
+- `core/app/Http/Controllers/HealthCheckController.php`
+- `core/config/app.php`
+- `core/.env.example`
+- `core/tests/Feature/R6HealthCheckTest.php`
+- `docs/audit/R6-observability-sre-dr-plan.md`
+
+### 29.3 Testes TDD criados
+
+- `test_readiness_fails_closed_when_monitor_token_is_not_configured`
+- `test_readiness_rejects_invalid_monitor_token_without_leaking_expected_value`
+
+### 29.4 Validação direcionada
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test tests/Feature/R6HealthCheckTest.php
+```
+
+Resultado:
+
+```text
+2 passed (6 assertions)
+```
+
+### 29.5 Lacunas documentais registradas
+
+- A documentação exige health live/ready/deep, mas ainda não define contrato JSON final completo para readiness/deep health.
+- A documentação exige dashboards/alertas e runbooks, mas ainda não define backend canônico de métricas/tracing.
+- A documentação existente de observabilidade/DR contém documentos antigos com status PASS; estes devem continuar tratados como evidência histórica até serem revalidados contra o estado atual.
+
+### 29.6 Próximo incremento recomendado
+
+Implementar R6.1/health readiness ampliado em TDD, adicionando verificação segura e não sensível para fila/queue backend e/ou migrations, sem executar operações financeiras e sem expor segredos.
+
+## 30. R6.1 — Incremento 2: readiness de queue backend e migrations
+
+### 30.1 Verificação autônoma do aviso do verificador
+
+Antes deste incremento, foi relido o estado pelos caminhos corretos a partir da raiz do projeto:
+
+- `core/config/app.php`
+- `core/app/Http/Controllers/HealthCheckController.php`
+- `core/.env.example`
+- `core/tests/Feature/R6HealthCheckTest.php`
+
+Resultado objetivo:
+
+1. `core/config/app.php` contém `monitor_token`.
+2. A configuração usa `env('MONITOR_TOKEN')`.
+3. Não há default secreto para o monitor token.
+4. `HealthCheckController` consome `config('app.monitor_token')`.
+5. `core/.env.example` contém `MONITOR_TOKEN=` sem valor real.
+6. Os testes existentes representam o comportamento atual de fail-closed e não vazamento do token.
+
+Conclusão: o aviso anterior era falso positivo de resolução de caminho causado por duplicação de `core/` no caminho do verificador. Nenhum arquivo foi alterado apenas para satisfazer esse aviso.
+
+### 30.2 Decisão arquitetural
+
+A documentação canônica exige que readiness valide DB, Redis, queue, storage, migrations e configuração crítica sem expor segredos. Este incremento adiciona apenas dois checks pequenos:
+
+- `queue`: valida que o backend de fila configurado existe em `queue.connections`.
+- `migrations`: valida que a tabela de controle de migrations configurada existe no banco.
+
+Decisões de segurança/critique:
+
+- O endpoint continua protegido por `X-Monitor-Token`.
+- Valores internos de conexão, nomes inválidos e nomes de tabela não são retornados no JSON.
+- Falhas geram apenas `ERROR` por categoria.
+- Erros de runtime, incluindo ausência de extensão Redis ou falhas de conectividade, são capturados como estado operacional `DOWN`, evitando 500 e evitando leak de stack trace.
+- O check de queue é intencionalmente de configuração neste incremento; backlog/idade/failed jobs ficam para deep health ou incremento posterior.
+
+### 30.3 Arquivos alterados
+
+- `core/app/Http/Controllers/HealthCheckController.php`
+- `core/tests/Feature/R6HealthCheckTest.php`
+- `docs/audit/R6-observability-sre-dr-plan.md`
+
+### 30.4 Testes TDD criados
+
+- `test_readiness_reports_queue_backend_configuration_state`
+- `test_readiness_reports_migrations_repository_state`
+
+### 30.5 Validação direcionada
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test tests/Feature/R6HealthCheckTest.php
+```
+
+Resultado:
+
+```text
+4 passed (14 assertions)
+```
+
+### 30.6 Lacunas documentais registradas
+
+- A documentação exige readiness para `queue`, mas não define se o check mínimo deve validar apenas configuração, conexão do backend, capacidade de enqueue/dequeue sintético, backlog ou todos esses itens.
+- A documentação exige migrations em readiness, mas não define contrato para distinguir tabela ausente, migrations pendentes ou schema incompatível.
+- A documentação exige failed jobs, backlog e scheduler freshness, mas estes pertencem a deep health ou incrementos posteriores, não a este incremento pequeno.
+
+### 30.7 Próximo incremento recomendado
+
+Implementar R6.1/health readiness para configuração crítica PSP segura ou iniciar deep health protegido com checks read-only de failed jobs/backlog/scheduler freshness, mantendo TDD e sem executar operações financeiras reais.
+
+## 31. R6.1 — Incremento 3: readiness de configurações críticas da plataforma
+
+### 31.1 Escopo
+
+Este incremento fortalece apenas o `GET /api/health/ready`. Não implementa deep health completo, métricas externas, tracing distribuído, dashboards, alertas de produção, backup automatizado, DR completo, deploy ou processamento financeiro real.
+
+O endpoint permanece somente leitura:
+
+- não cria registros;
+- não publica jobs;
+- não executa pagamentos;
+- não chama gateways;
+- não altera banco;
+- não altera filas.
+
+### 31.2 Dependências críticas incluídas
+
+A partir da documentação canônica e configuração existente, foram consideradas críticas para aceitar tráfego:
+
+- `app_key`: `config('app.key')`, derivado de `APP_KEY`, obrigatório para criptografia Laravel.
+- `monitor_token`: já validado em incremento anterior via `config('app.monitor_token')`.
+- `database`: conexão DB já validada.
+- `redis`: já validado por ser usado por queue/cache/locks e requerido nos documentos de HA.
+- `queue`: backend configurado já validado.
+- `migrations`: tabela de migrations já validada.
+- `storage`: check local já existente.
+- `gateway_efi`: configuração mínima Efí existente em `config/services.php`, sem chamada externa.
+
+Para `gateway_efi`, o readiness verifica somente presença de configuração mínima:
+
+- `client_id`;
+- `client_secret`;
+- `pix_key`;
+- `certificate_path`.
+
+O readiness não valida existência do certificado em disco nesta rodada, porque o contrato pedido é de configurações críticas e porque o check de arquivo pode exigir decisão operacional sobre path relativo/absoluto e ambiente. Essa lacuna fica registrada para incremento posterior.
+
+### 31.3 Contrato JSON consolidado do readiness
+
+Endpoint:
+
+```text
+GET /api/health/ready
+```
+
+Headers:
+
+```text
+X-Monitor-Token: <token configurado em MONITOR_TOKEN>
+```
+
+Resposta autorizada:
+
+```json
+{
+  "status": "UP|DOWN",
+  "service": "originpay",
+  "checked_at": "ISO-8601 timestamp",
+  "checks": {
+    "app_key": "OK|ERROR",
+    "database": "OK|ERROR",
+    "redis": "OK|ERROR",
+    "queue": "OK|ERROR",
+    "migrations": "OK|ERROR",
+    "storage": "OK|ERROR",
+    "gateway_efi": "OK|ERROR"
+  }
+}
+```
+
+Significado:
+
+- `status=UP`: todos os checks executados retornaram `OK`.
+- `status=DOWN`: pelo menos um check retornou `ERROR`.
+- `checks.*=OK`: categoria crítica disponível/configurada para readiness.
+- `checks.*=ERROR`: categoria crítica indisponível ou incompleta.
+- HTTP `200`: readiness `UP`.
+- HTTP `503`: readiness `DOWN`.
+- HTTP `401`: token de monitoramento ausente/incorreto quando `MONITOR_TOKEN` está configurado.
+- HTTP `503` com `checks.monitor_token=ERROR`: `MONITOR_TOKEN` não configurado.
+
+Regras de segurança do contrato:
+
+- nunca retornar valores de secrets;
+- nunca retornar nomes de variáveis secretas como `APP_KEY`, `EFI_CLIENT_SECRET` etc.;
+- nunca retornar stack traces;
+- nunca retornar detalhes de provider que permitam enumeração de credenciais;
+- usar apenas categorias estáveis de check.
+
+### 31.4 Diferenças entre live, ready e deep health
+
+- `live`: prova que o processo HTTP está vivo. Deve ser rápido, público/seguro e sem dependências externas.
+- `ready`: prova que a instância pode receber tráfego de forma segura. Pode checar dependências críticas e configuração mínima, mas deve permanecer leve, read-only e sem chamadas financeiras/PSP.
+- `deep health`: inspeção operacional protegida para SRE. Pode avaliar backlog, failed jobs, DLQ age/count, scheduler freshness, PSP sandbox/prod e backup freshness. Não foi implementado nesta rodada.
+
+### 31.5 Decisões arquiteturais
+
+- `APP_KEY` é readiness crítico porque criptografia/session/cookies/segredos dependem dele.
+- `gateway_efi` é readiness crítico porque a arquitetura atual contém provider Efí e documentação exige config PSP crítica em readiness.
+- O check `gateway_efi` é propositalmente de configuração, não de conectividade PSP.
+- Não há exposição de valores nem nomes de segredos no JSON.
+- Checks continuam independentes: uma falha marca somente sua categoria como `ERROR` e o status global como `DOWN`.
+
+### 31.6 Testes TDD criados
+
+- `test_readiness_reports_missing_application_key_without_exposing_secret_names_or_values`
+- `test_readiness_reports_missing_efi_gateway_config_without_exposing_secret_names_or_values`
+
+### 31.7 Validação direcionada
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test tests/Feature/R6HealthCheckTest.php
+```
+
+Resultado:
+
+```text
+6 passed (29 assertions)
+```
+
+### 31.8 Lacunas e riscos restantes
+
+- O contrato ainda não define se readiness deve validar existência de certificado PSP em disco ou deixar isso para deep health.
+- O contrato ainda não define gateways múltiplos além de Efí como readiness crítico.
+- O contrato ainda não valida migrations pendentes, apenas existência da tabela de controle.
+- Backlog, failed jobs, DLQ age/count e scheduler freshness continuam fora do readiness e devem ser tratados em deep health protegido.
+- Não há backend canônico de métricas/tracing definido.
+
+### 31.9 Próximo incremento recomendado
+
+Concluir R6.1 com eventual decisão sobre certificado PSP/configuração de múltiplos gateways, ou avançar para o primeiro incremento pequeno de deep health protegido e read-only, começando por failed jobs/backlog/scheduler freshness, sem chamadas PSP e sem operações financeiras reais.
+
+
+## 32. R6.1 — Revisão arquitetural final do readiness
+
+### 32.1 Evidências objetivas sobre gateways
+
+- Existem múltiplos gateways no código: `mock`, `efi`, `sicoob` na camada moderna `App\Services\Gateways`, além de providers legados em `app/Payment/*` e registros em `PaymentGatewaySeeder` como `moneroo`, `strowallet`, `binance`, `airtel`, `blockchain`, `blockio`, `bitpayserver`, `cashmaal`, `coingate`, `coinpayments` e outros.
+- Existe abstração/adaptador: `App\Contracts\Gateways\GatewayInterface`, `GatewayRegistry`, `GatewayManager`, adapters `EfiGatewayAdapter`, `SicoobGatewayAdapter` e `MockGatewayAdapter`.
+- Existe failover por merchant: `GatewayManager::authorize()` lê `MerchantGateway::where('merchant_id', ...)`, filtra `enabled=true`, ordena por `priority asc` e tenta o próximo gateway quando há falha técnica, health failure ou circuit breaker aberto.
+- Existe prioridade: `merchant_gateways.priority` e `payment_gateways.priority`.
+- Existem credenciais por tenant/merchant em `merchant_gateways.configuration` e também credenciais globais/configuracionais em `config/services.php` e `payment_gateways.credentials`.
+- Efí não é o único gateway e não está demonstrada como dependência global obrigatória de toda instância.
+- A aplicação consegue operar parte do tráfego sem Efí: sandbox usa fallback `mock`; rotas administrativas, auth, ledger, webhooks, developer portal e outros fluxos não dependem de Efí para aceitar requisição HTTP.
+- A ausência de gateway deve desabilitar capacidade operacional específica de pagamento/PSP, não derrubar globalmente a instância, salvo política futura explícita que exija PSP global ativo.
+- Existe gateway padrão/fallback de sandbox (`mock`) e status/habilitação por `merchant_gateways.enabled`, `payment_gateways.status`, `is_maintenance` e flags de suporte.
+- Certificado é requisito de fluxos Efí específicos, não evidência de requisito global para todos os gateways ou todos os fluxos.
+- Há ambientes de teste/desenvolvimento/sandbox sem certificado real: `mock` sandbox e `services.efi.env` com default `sandbox`; o seed deixa Efí inativa por padrão até configurar.
+
+### 32.2 Decisão formal sobre `gateway_efi`
+
+Cenário aplicado: **B — Efí é opcional, substituível ou específica de tenant**.
+
+- `gateway_efi` foi removido do readiness global.
+- Ausência de configuração Efí global em `.env` não retorna `503` global.
+- Disponibilidade/configuração de PSP passa a ser capacidade operacional para deep health futuro ou endpoint operacional específico, protegido e sem exposição de segredos.
+- O readiness global valida apenas infraestrutura global necessária à instância.
+
+### 32.3 Decisão sobre certificado PSP
+
+- O certificado físico não faz parte do readiness global nesta R6.1.
+- Para Efí, certificado deve ser validado no momento de habilitar/configurar gateway, no boot apenas se política futura marcar Efí como globalmente obrigatória, ou em deep health operacional protegido.
+- Readiness não deve falhar globalmente por certificado de gateway opcional ausente.
+- Qualquer check futuro de certificado deve ser local, leve, sem leitura/retorno de conteúdo, sem caminho absoluto no JSON e sem parsing pesado por requisição.
+
+### 32.4 Matriz de criticidade dos checks atuais
+
+| Check | Global/opcional | Criticidade | Operação | Efeito colateral | Custo/timeout | Falha | Vazamento | Adequação |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `monitor_token` | Global | Crítica | compara header com config via `hash_equals` | nenhum | mínimo | 401 inválido; 503 se não configurado | baixo | readiness adequado |
+| `app_key` | Global | Crítica | valida presença de `config('app.key')` | nenhum | mínimo | `ERROR` + 503 | baixo | readiness adequado |
+| `database` | Global | Crítica | `DB::connection()->getPdo()` | nenhum intencional | baixo, depende timeout PDO | `ERROR` + 503 | baixo | readiness adequado |
+| `redis` | Documentado como baseline R0/R6 | Alta/Crítica | `Redis::connection()->ping()` | nenhum | baixo, depende timeout Redis | `ERROR` + 503 | baixo | readiness adequado enquanto Redis permanecer baseline canônico; se Redis se tornar opcional, revisar |
+| `queue` | Global como capacidade configurada | Alta | valida `queue.default` presente em `queue.connections` | nenhum; não publica job | mínimo | `ERROR` + 503 | baixo | readiness mínimo; conectividade/backlog ficam para deep health |
+| `migrations` | Global DB/schema | Alta | `Schema::hasTable(migrations)` | consulta metadata; sem migration | baixo | `ERROR` + 503 | baixo | readiness mínimo; pendências ficam para deploy gate/deep health |
+| `storage` | Global local | Alta | escreve e remove arquivo sintético em disk local | temporário, sem resíduo esperado | baixo | `ERROR` + 503 | baixo | aceitável para readiness com cleanup; pode ser reavaliado |
+| `gateway_efi` | Opcional/tenant/capacidade PSP | Não global | removido | nenhum | nenhum | não afeta status global | nenhum | deep health/endpoint operacional futuro |
+
+### 32.5 Contrato final do readiness R6.1
+
+```text
+GET /api/health/ready
+X-Monitor-Token: <MONITOR_TOKEN>
+```
+
+```json
+{
+  "status": "UP|DOWN",
+  "service": "originpay",
+  "checked_at": "ISO-8601",
+  "checks": {
+    "app_key": "OK|ERROR",
+    "database": "OK|ERROR",
+    "redis": "OK|ERROR",
+    "queue": "OK|ERROR",
+    "migrations": "OK|ERROR",
+    "storage": "OK|ERROR"
+  }
+}
+```
+
+Códigos HTTP: `200` quando todos os checks globais estão `OK`; `503` quando qualquer check global está `ERROR` ou `MONITOR_TOKEN` não está configurado; `401` quando o token configurado não confere.
+
+Política: checks retornam apenas `OK`/`ERROR`; não retorna exceções, stack trace, hostname, DSN, SQL, caminhos, nomes de secrets, tokens, certificados, credenciais ou dados de tenant; não chama PSP, não cria transação financeira, não publica job e não consulta credenciais de tenant.
+
+### 32.6 Arquivos alterados
+
+- `core/app/Http/Controllers/HealthCheckController.php`
+- `core/tests/Feature/R6HealthCheckTest.php`
+- `docs/audit/R6-observability-sre-dr-plan.md`
+
+### 32.7 Testes TDD criados/ajustados
+
+- `test_readiness_does_not_fail_globally_when_optional_efi_gateway_config_is_missing`
+
+Ciclo TDD: RED falhou com HTTP 503 por `gateway_efi`; GREEN removeu `gateway_efi` do controller; teste direcionado passou.
+
+### 32.8 Validação final executada
+
+Teste direcionado:
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test tests/Feature/R6HealthCheckTest.php
+```
+
+Resultado:
+
+```text
+6 passed (28 assertions)
+```
+
+Regressão completa:
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test
+```
+
+Resultado:
+
+```text
+419 passed (1454 assertions)
+```
+
+Pint nos arquivos PHP alterados:
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe vendor/bin/pint --test app/Http/Controllers/HealthCheckController.php tests/Feature/R6HealthCheckTest.php
+```
+
+Resultado:
+
+```text
+PASS 2 files
+```
+
+PHPStan: não executado porque não existe `phpstan.neon*` no projeto.
+
+### 32.9 Limitações, lacunas e riscos restantes
+
+- Redis permanece como dependência crítica por baseline documental; se a arquitetura futura permitir execução sem Redis, o readiness deve ser revisto.
+- `queue` ainda é check de configuração, não prova conectividade do backend nem capacidade de processamento.
+- `migrations` ainda valida apenas existência da tabela, não pendências de schema.
+- `storage` realiza escrita sintética local temporária; pode ser reavaliada se houver política estrita de zero escrita em readiness.
+- Deep health, backlog, failed jobs, DLQ, scheduler freshness, métricas, tracing, dashboards, backup/restore e DR continuam fora do escopo desta rodada.
+
+### 32.10 Decisão formal de encerramento
+
+R6.1 — CONCLUÍDA
+
+Justificativa: o contrato global de readiness ficou estável, sem dependência PSP incorreta, com autenticação fail-closed, checks globais leves/read-only ou localmente seguros, redaction preservada e teste automatizado cobrindo a decisão arquitetural sobre Efí opcional.
+
+
+## R6.2 — Logging estruturado, Correlation ID e contexto operacional
+
+### Escopo executado
+
+Este incremento criou a fundação local de observabilidade para logs e contexto operacional. Não foram implementados métricas, tracing distribuído, dashboards, alertas, deep health, Prometheus, OpenTelemetry, Grafana, Loki ou Jaeger.
+
+### Validação inicial e lacunas confirmadas
+
+Inspeção realizada em `config/logging.php`, `bootstrap/app.php`, middleware globais, usos de `Log::`, jobs, filas/listeners/eventos e documentação canônica. O estado local já possuía `CorrelationIdMiddleware`, canais de log por domínio e alguns logs/auditoria pontuais, porém com lacunas:
+
+- havia Correlation ID básico por request, mas o contexto operacional era incompleto e usava nomes divergentes (`method`, `route`, `authenticated_user_id`);
+- havia Request ID, mas não havia contrato claro entre request id e correlation id;
+- havia contexto global via Laravel Context, mas sem padronização completa dos campos mínimos da R6.2;
+- havia redaction parcial em pontos específicos, mas não mecanismo centralizado para logs operacionais;
+- havia canais `payments`, `webhooks`, `gateway`, `security`, `audit`, `performance`, `single` e `daily`, mas sem processor comum para injetar contexto e aplicar redaction de forma uniforme;
+- jobs/listeners/eventos já existem e alguns carregam correlation id no domínio, mas a propagação ponta a ponta para todos os jobs financeiros ainda requer incremento dedicado.
+
+### Arquitetura adotada
+
+Arquitetura mantida simples e compatível com Laravel:
+
+- `app/Http/Middleware/CorrelationIdMiddleware.php` permanece como middleware dedicado global;
+- `app/Support/Observability/StructuredLogContext.php` centraliza o contrato de contexto operacional mínimo;
+- `app/Support/Observability/LogRedactor.php` centraliza mascaramento de dados sensíveis;
+- `app/Logging/StructuredLogProcessor.php` atua como tap de Monolog/Laravel para injetar contexto e redigir payloads de log;
+- `config/logging.php` conecta o processor aos canais operacionais existentes.
+
+### Fluxo do Correlation ID
+
+1. A request entra no middleware global.
+2. Se o cliente enviar `X-Correlation-ID`, esse valor é preservado exatamente.
+3. Se o header não existir, é gerado UUID v4.
+4. O valor é registrado no `EventContext` e no `Illuminate\Support\Facades\Context`.
+5. O mesmo valor permanece disponível durante a request para controllers, services, actions, logs e futuras integrações.
+6. A resposta sempre recebe `X-Correlation-ID`.
+7. O middleware não gera novo ID dentro da mesma request.
+
+### Formato de contexto mínimo dos logs
+
+Campos suportados pela fundação R6.2, omitindo valores inexistentes:
+
+- `correlation_id`;
+- `timestamp`;
+- `tenant_id`;
+- `merchant_id`;
+- `user_id`;
+- `api_key_id`;
+- `gateway`;
+- `payment_id`;
+- `request_method`;
+- `request_path`;
+- `ip`;
+- `status_code`;
+- `duration_ms`.
+
+### Política de redaction
+
+`LogRedactor` é o ponto central de mascaramento. Ele redige chaves sensíveis em arrays aninhados e padrões sensíveis em strings. Escopo inicial:
+
+- authorization / proxy-authorization;
+- bearer tokens;
+- cookies / set-cookie;
+- API keys (`x-api-key`, `api_key`, variações);
+- tokens;
+- secrets / `client_secret`;
+- password / senha;
+- pix key;
+- certificados / private key.
+
+A política evita `replace()` manual espalhado e deve ser estendida no próprio redactor conforme novos campos sensíveis forem identificados.
+
+### Testes criados
+
+Arquivo: `core/tests/Feature/R62ObservabilityFoundationTest.php`.
+
+Cobertura adicionada:
+
+- gera Correlation ID quando ausente;
+- preserva Correlation ID recebido;
+- retorna `X-Correlation-ID`;
+- duas requests diferentes possuem IDs diferentes;
+- mesma request mantém o mesmo ID;
+- contexto de log/request recebe Correlation ID;
+- redaction remove `Authorization`;
+- redaction remove `Bearer`;
+- redaction remove `client_secret`;
+- redaction remove API Key;
+- redaction remove cookies/headers sensíveis em payload aninhado.
+
+### Validação executada
+
+Com PHP exclusivo do Laragon (`E:\laragonin\php\php-8.3.30-Win32-vs16-x64\php.exe`):
+
+- Teste direcionado: `PASS — 7 passed (16 assertions)`;
+- Regressão completa: `PASS — 426 passed (1470 assertions)`;
+- Pint nos arquivos alterados: `PASS — 6 files`;
+- PHPStan: não executado porque não há `phpstan.neon` ou `phpstan.neon.dist` no diretório `core`.
+
+### Riscos restantes
+
+- Propagação explícita para todos os jobs financeiros, listeners e eventos internos ainda deve ser auditada caso a caso;
+- nem todo uso legado de `Log::` foi reescrito para contexto semântico de domínio (`gateway`, `payment_id`, `merchant_id` etc.);
+- logs de exception usam o canal/processors configurados, mas ainda falta teste dedicado para exceções reportadas pelo handler sem alterar comportamento funcional;
+- redaction central cobre padrões principais, mas deve evoluir com novos payloads reais de PSPs e integrações;
+- formato estruturado ainda depende dos formatters atuais dos canais Laravel/Monolog; o incremento não troca backend nem adota JSON formatter obrigatório.
+
+### Próximo incremento recomendado
+
+R6.3 deve focar propagação operacional em jobs/eventos/listeners e exceptions: serializar/restaurar correlation id em jobs críticos, padronizar contexto semântico em logs financeiros (`gateway`, `payment_id`, `merchant_id`, `api_key_id`) e criar testes dedicados para exceções reportadas com correlation id e redaction.
+
+
+## R6.2 — Retomada e encerramento formal com integração real do logging
+
+### Estado real de `core/config/logging.php`
+
+A inspeção objetiva confirmou que os canais `payments`, `webhooks`, `gateway`, `security`, `audit`, `performance`, `single` e `daily` existem em `core/config/logging.php`. Os canais de domínio usam driver `daily`; `single` usa driver `single`; `daily` usa driver `daily`. Todos preservam seus `path`, `level`, `days`/retenção quando aplicável e `replace_placeholders`, e todos declaram `tap => [App\Logging\StructuredLogProcessor::class]` exatamente uma vez.
+
+| Canal | Driver | Processor conectado | Duplicação | Carregamento |
+| --- | --- | --- | --- | --- |
+| `payments` | `daily` | sim, via `tap` | não | PASS |
+| `webhooks` | `daily` | sim, via `tap` | não | PASS |
+| `gateway` | `daily` | sim, via `tap` | não | PASS |
+| `security` | `daily` | sim, via `tap` | não | PASS |
+| `audit` | `daily` | sim, via `tap` | não | PASS |
+| `performance` | `daily` | sim, via `tap` | não | PASS |
+| `single` | `single` | sim, via `tap` | não | PASS |
+| `daily` | `daily` | sim, via `tap` | não | PASS |
+
+O aviso anterior sobre `config/logging.php` foi classificado como falso positivo de aplicação de patch: o arquivo já continha a integração pretendida, e nenhum ajuste artificial foi feito nele nesta retomada. A evidência deixou de ser textual e passou a ser executável, emitindo logs reais por canal temporariamente redirecionado para artefatos isolados.
+
+### Integração real do processor
+
+Foram adicionados testes que emitem logs reais nos oito canais acima, com arquivo temporário isolado por execução. O teste comprova que o processor injeta `correlation_id`, `request_method`, `request_path`, `ip` e `timestamp`, redige segredos em contexto aninhado e preserva valores não sensíveis. Também foi corrigida a duplicação observada entre `context` e `extra`: `StructuredLogProcessor` agora remove de `extra` as chaves de contexto propagadas antes de retornar o `LogRecord`, evitando duplicar `correlation_id` na linha final do log.
+
+### Exception reporting
+
+Foi criado teste dedicado para uma exceção reportada durante o ciclo de request. A validação comprova que o log contém o `correlation_id`, o mesmo ID é retornado no header, `client_secret` e `Authorization: Bearer ...` não aparecem no log, o payload HTTP em ambiente não-debug não retorna classe de exceção nem stack trace, e o status HTTP funcional permanece `500` para a falha simulada. A arquitetura real usa `bootstrap/app.php` com configuração moderna de exceptions.
+
+### Política final de redaction R6.2
+
+`LogRedactor` mantém allowlist explícita de nomes sensíveis, com comparação case-insensitive e exata após normalização para lowercase. São redigidos: `authorization`, `proxy-authorization`, `bearer`, `access_token`, `refresh_token`, `token`, `api_key`, `api-key`, `x-api-key`, `apikey`, `client_secret`, `client-secret`, `secret`, `password`, `passwd`, `senha`, `cookie`, `set-cookie`, `private_key`, `certificate`, `certificado`, `pix_key` e `pix key`.
+
+Decisão crítica: não redigir todo campo que contenha a palavra `key`, para evitar mascarar identificadores não secretos. Testes garantem que `payment_key_type`, `idempotency_key_hash` e `public_key_id` permanecem intactos.
+
+### Política segura de `X-Correlation-ID`
+
+A política final é: UUID válido recebido é preservado exatamente; header ausente gera UUID v4; valor com CR/LF, longo demais ou arbitrário inválido é rejeitado e substituído por UUID v4; CR/LF nunca é refletido no header de resposta ou nos logs. O limite aplicado é de 64 caracteres e o formato aceito é UUID validado por `Str::isUuid()`.
+
+### Arquivos alterados nesta retomada
+
+- `core/app/Http/Middleware/CorrelationIdMiddleware.php`;
+- `core/app/Logging/StructuredLogProcessor.php`;
+- `core/app/Support/Observability/LogRedactor.php`;
+- `core/tests/Feature/R62ObservabilityFoundationTest.php`;
+- `docs/audit/R6-observability-sre-dr-plan.md`.
+
+`core/config/logging.php` foi inspecionado e testado, mas não foi alterado.
+
+### Testes de integração reais adicionados
+
+`core/tests/Feature/R62ObservabilityFoundationTest.php` agora cobre matriz de canais, presença única do `StructuredLogProcessor`, emissão real em `payments`, `webhooks`, `gateway`, `security`, `audit`, `performance`, `single` e `daily`, `correlation_id` no log, contexto HTTP, redaction de `Authorization`, Bearer token, `client_secret`, API key, cookies sensíveis e contexto aninhado, preservação de valor comum não sensível, ausência de duplicação de `correlation_id`, exception reporting com correlation id e política segura para `X-Correlation-ID` recebido.
+
+### Validação executável
+
+PHP utilizado exclusivamente:
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe
+```
+
+Teste direcionado:
+
+```text
+E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe artisan test tests/Feature/R62ObservabilityFoundationTest.php
+23 passed (211 assertions)
+```
+
+PHPStan: não executado porque não existe `phpstan.neon*` em `core`.
+
+### Riscos restantes
+
+- A propagação explícita de correlation id para todos os jobs, listeners e eventos financeiros ainda requer incremento dedicado.
+- O formato global dos logs ainda usa os formatters existentes; esta rodada não migrou para JSON global.
+- A política de redaction cobre os principais campos atuais, mas deve evoluir com payloads reais de PSPs e integrações futuras.
+- Métricas, tracing, dashboards, alertas, deep health, backup e DR continuam fora do escopo deste incremento.
+
+### Decisão formal
+
+R6.2 — CONCLUÍDA
+
+Justificativa: o processor está comprovadamente ativo em logs reais dos canais críticos, redaction foi testada contra logs emitidos, exception reporting preserva `correlation_id`, e o `X-Correlation-ID` recebido está protegido contra injeção e cardinalidade arbitrária.
+
+
+## R6.3 — Propagação de contexto operacional em filas, jobs, eventos e listeners financeiros críticos
+
+### Escopo executado
+Este incremento implementou somente a propagação mínima de contexto operacional para o fluxo assíncrono crítico de webhooks financeiros. Não foram implementados métricas, Prometheus, OpenTelemetry, tracing externo, dashboards, alertas, deep health, backup, restore, DR, deploy, go-live, Release Candidate ou processamento financeiro real.
+
+### Inventário assíncrono validado antes da implementação
+- Jobs existentes identificados: `ProcessGatewayWebhookJob`, `ProcessWebhookJob`, `ReplayWebhookJob`, `WebhookProcessingJob`, `RetryWebhookDeliveryJob`, `ProcessWithdrawalJob`, `FinancialExportJob`, `Treasury\ReleaseRollingReserveJob`, jobs de disputes e jobs do módulo Connect.
+- Jobs financeiros críticos priorizados nesta rodada: `ProcessGatewayWebhookJob`, por estar no pipeline de webhook gateway → charge/status → DLQ.
+- Jobs de webhook: `ProcessGatewayWebhookJob`, `ProcessWebhookJob`, `ReplayWebhookJob`, `WebhookProcessingJob`, `RetryWebhookDeliveryJob`.
+- Jobs de pagamento/refund/settlement/reconciliação: não há job dedicado de refund/settlement/reconciliation equivalente no inventário atual; há comandos de reconciliação e serviços de settlement. Lacuna mantida para incremento posterior.
+- Jobs de notificação: listeners e delivery de webhooks outbound (`RetryWebhookDeliveryJob`, listeners de subscription/charge/webhooks) existem, mas não foram alterados nesta rodada.
+- DLQ/reprocessamento: `WebhookDeadLetter`, `WebhookDlq`, ações admin de reprocessamento e `ReplayWebhookJob` existem; a cobertura R6.3 focou o job gateway inbound e payload seguro.
+- Middleware de fila existente: não havia middleware de queue específico para contexto operacional antes da R6.3.
+- Traits/contratos: não havia trait reutilizável de contexto operacional em jobs; foi criado `CarriesOperationalContext`.
+- Driver de fila: `config/queue.php` usa default `database`, com conexões `sync`, `database`, `redis`, `sqs`, `beanstalkd`; Horizon possui filas críticas documentadas anteriormente.
+- Serialização atual: Laravel serializa o job no payload de queue. O teste R6.3 inspeciona o payload Laravel efetivo produzido por `createPayload`.
+- Retries/backoff/timeout: `ProcessGatewayWebhookJob` possui `tries=3` e `backoff=[10,30,60]`; `ProcessWithdrawalJob` possui `tries=3` e `timeout=120`; outros jobs variam e ficam para auditoria posterior.
+- Logs em jobs: `ProcessGatewayWebhookJob` já emitia logs de skip/failure e `GatewayLog`; R6.3 garante que o processor receba contexto restaurado para logs emitidos durante a execução do worker.
+- Contexto pré-existente: request HTTP já possuía `correlation_id` por R6.2; não havia continuidade centralizada para queue/worker/job.
+
+### Arquitetura adotada
+- `App\Support\Observability\CarriesOperationalContext`: trait pequeno e serializável para capturar `correlation_id`, `tenant_id`, `merchant_id`, `user_id`, `api_key_id`, `payment_id`, `gateway`, `webhook_event_id` e `job_id`, omitindo valores inexistentes.
+- `App\Support\Observability\QueueOperationalContext`: helper central para restaurar contexto no worker e limpar contexto após processamento.
+- `App\Providers\AppServiceProvider`: registra hooks `Queue::before`, `Queue::after` e `Queue::exceptionOccurred` para restaurar/limpar contexto em workers Laravel e registrar falhas com contexto.
+- `App\Jobs\ProcessGatewayWebhookJob`: passou a carregar o contexto operacional e a sanitizar headers serializados.
+
+### Política de correlation_id e job_id
+- Job despachado dentro de request herda `Context::get('correlation_id')` quando disponível e válido; sem request/contexto, gera UUID seguro.
+- Worker restaura o contexto antes de executar o job; logs emitidos durante o job recebem o mesmo contexto via `StructuredLogProcessor`.
+- Eventos/listeners que usarem o trait podem herdar o contexto ativo do job.
+- Em retry, `correlation_id` e `job_id` permanecem estáveis porque nascem no objeto serializado do job.
+- Após job processado ou com exceção, o contexto é limpo para evitar contaminação do próximo job no mesmo worker.
+- O `job_id` operacional nasce no momento de construção/captura do job como UUID próprio do payload OriginPay; em redispatch manual ou novo job, nasce novo `job_id`.
+- O `job_id` não é `correlation_id`, não é `payment_id` e não é `webhook_event_id`.
+
+### Segurança de serialização
+O payload Laravel efetivo foi testado para não conter headers/segredos removidos de `ProcessGatewayWebhookJob`: `Authorization`, bearer token, API key bruta (`X-Api-Key`/`api-key`), `client_secret`, cookies e headers sensíveis bloqueados.
+
+### Testes TDD criados
+Arquivo: `core/tests/Feature/R63QueueOperationalContextTest.php`.
+
+Cobertura executável: contexto de request no job, geração sem request, restore no worker, logs com `correlation_id`/`job_id`, retry estável, falha com contexto, propagação de `merchant_id`, `payment_id`, `gateway`, `webhook_event_id`, inspeção do payload Laravel contra segredos, limpeza pós-job, isolamento entre jobs, herança por evento/listener compatível e `job_id` distinto entre jobs.
+
+### Validação executada
+PHP utilizado exclusivamente: `E:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe`.
+
+- Direcionados R6.3 + R6.2: `30 passed (235 assertions)`.
+- Regressão completa: `449 passed (1689 assertions)`.
+- Pint nos arquivos alterados: `PASS 5 files` após correção automática de estilo.
+- PHPStan: não executado porque não há `phpstan.neon*` no projeto.
+
+### Lacunas documentais e técnicas restantes
+- A documentação canônica não define ainda uma matriz final de todos os jobs financeiros que devem carregar contexto; esta rodada priorizou o fluxo gateway webhook inbound.
+- Eventos/listeners financeiros existentes ainda não possuem padronização universal de contexto; foi entregue infraestrutura reutilizável e teste de herança, não migração ampla.
+- Jobs de settlement/refund/reconciliation dedicados não foram encontrados como jobs Laravel equivalentes; há comandos/serviços que devem ser avaliados em rodada posterior.
+- `RetryWebhookDeliveryJob`, `ProcessWithdrawalJob`, jobs Connect e listeners de subscription/charge não foram alterados para evitar expansão de escopo sem requisito específico.
+- Alguns fluxos legados ainda persistem payloads de webhook/DLQ; redaction/logging existe, mas política de armazenamento de payload sensível deve ser revisada em incremento de segurança separado.
+
+### Decisão formal
+R6.3 — CONCLUÍDA para o incremento pequeno planejado: continuidade verificável de contexto operacional no fluxo crítico `HTTP request → dispatch → payload Laravel → queue/worker → job → logs`, com infraestrutura reutilizável para eventos/listeners e limpeza pós-job.

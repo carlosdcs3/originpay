@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
 use App\Models\CustomLanding;
+use App\Services\Cms\CustomLandingSecurity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 class CustomLandingController extends Controller
 {
+    public function __construct(private readonly CustomLandingSecurity $security) {}
+
     public function index()
     {
         $landings = CustomLanding::latest()->get();
@@ -48,12 +51,16 @@ class CustomLandingController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'    => 'required|string|unique:custom_landings,name',
+            'name' => 'required|string|unique:custom_landings,name',
             'zipFile' => 'required|file|mimes:zip|max:10240',
         ]);
 
+        if ($this->security->validateArchive($request->file('zipFile')) !== []) {
+            return back()->withErrors(['zipFile' => 'Arquivo ZIP contém conteúdo não permitido.']);
+        }
+
         $folder = Str::slug($request->name).'-'.time();
-        $path   = public_path("custom-landings/{$folder}");
+        $path = public_path("custom-landings/{$folder}");
         File::makeDirectory($path, 0755, true);
 
         if (! $this->extractAndReplaceFolder($request->file('zipFile'), $path, $folder)) {
@@ -65,7 +72,7 @@ class CustomLandingController extends Controller
 
         // Create the new landing page
         CustomLanding::create([
-            'name'   => $request->name,
+            'name' => $request->name,
             'folder' => $folder,
             'status' => true,
         ]);
@@ -86,8 +93,8 @@ class CustomLandingController extends Controller
     {
         $landing_page = CustomLanding::find($landing_page);
         $request->validate([
-            'name'    => 'required|string|unique:custom_landings,name,'.$landing_page->id,
-            'status'  => 'required|boolean',
+            'name' => 'required|string|unique:custom_landings,name,'.$landing_page->id,
+            'status' => 'required|boolean',
             'zipFile' => 'nullable|file|mimes:zip|max:10240',
         ]);
 
@@ -96,8 +103,12 @@ class CustomLandingController extends Controller
         }
 
         if ($request->hasFile('zipFile')) {
+            if ($this->security->validateArchive($request->file('zipFile')) !== []) {
+                return back()->withErrors(['zipFile' => 'Arquivo ZIP contém conteúdo não permitido.']);
+            }
+
             $folder = $landing_page->folder;
-            $path   = public_path("custom-landings/{$folder}");
+            $path = public_path("custom-landings/{$folder}");
 
             // Clear existing files
             File::cleanDirectory($path);
@@ -108,7 +119,7 @@ class CustomLandingController extends Controller
         }
 
         $landing_page->update([
-            'name'   => $request->name,
+            'name' => $request->name,
             'status' => $request->status,
         ]);
 
@@ -120,8 +131,8 @@ class CustomLandingController extends Controller
     public function manageHtml($id)
     {
         $landing_page = CustomLanding::find($id);
-        $indexPath    = public_path("custom-landings/{$landing_page->folder}/index.html");
-        $content      = File::exists($indexPath) ? File::get($indexPath) : '';
+        $indexPath = public_path("custom-landings/{$landing_page->folder}/index.html");
+        $content = File::exists($indexPath) ? File::get($indexPath) : '';
 
         return view('backend.landings.manage_html', compact('landing_page', 'content'));
     }
@@ -129,9 +140,10 @@ class CustomLandingController extends Controller
     public function manageHtmlUpdate(Request $request, $id)
     {
         $landing_page = CustomLanding::find($id);
-        $indexPath    = public_path("custom-landings/{$landing_page->folder}/index.html");
+        $indexPath = public_path("custom-landings/{$landing_page->folder}/index.html");
 
-        $htmlContent = $request->input('htmlContent');
+        $request->validate(['htmlContent' => 'required|string|max:1048576']);
+        $htmlContent = $this->security->sanitizeHtml((string) $request->input('htmlContent'));
 
         File::put($indexPath, $htmlContent);
 

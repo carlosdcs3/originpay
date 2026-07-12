@@ -3,22 +3,23 @@
 namespace App\Services\Payments;
 
 use App\Contracts\Payments\ChargeRepositoryInterface;
-use App\Domain\Payments\Charge;
-use App\Enums\ChargeStatus;
-use Illuminate\Support\Str;
-use App\Events\ChargeStatusChanged;
 use App\Domain\Auth\MerchantContext;
+use App\Domain\Payments\Charge;
+use App\Domain\Payments\GatewayAuthorizeRequest;
+use App\Enums\ChargeStatus;
+use App\Events\ChargeStatusChanged;
 use App\Models\Charge as EloquentCharge;
 use App\Models\ChargeTransition;
-use App\Domain\Payments\GatewayResult;
-use App\Domain\Payments\GatewayAuthorizeRequest;
 use App\Services\Gateways\GatewayManager;
+use App\Support\Observability\Metrics\LocalMetricsCollector;
+use Illuminate\Support\Str;
 
 class ChargeService
 {
     public function __construct(
         private readonly ChargeRepositoryInterface $repository,
-        private readonly GatewayManager $gatewayManager
+        private readonly GatewayManager $gatewayManager,
+        private readonly LocalMetricsCollector $metrics,
     ) {}
 
     public function createCharge(array $data, MerchantContext $merchant): Charge
@@ -28,13 +29,13 @@ class ChargeService
         $paymentMethodId = $data['payment_method_id'] ?? null;
         $amount = (int) $data['amount'];
         $merchantMetadata = $data['metadata'] ?? [];
-        
+
         // Generate internal number
-        $chargeNumber = 'Charge #' . rand(10000, 99999);
+        $chargeNumber = 'Charge #'.rand(10000, 99999);
 
         // 1. Create Pending Charge
         $charge = new Charge(
-            id: 'ch_' . Str::ulid(),
+            id: 'ch_'.Str::ulid(),
             merchantId: $merchant->merchantId,
             sessionId: $sessionId,
             paymentMethodId: $paymentMethodId,
@@ -49,11 +50,19 @@ class ChargeService
 
         $this->repository->save($charge);
         $this->recordTransition($charge->id, null, ChargeStatus::PENDING, 'Charge created');
-        
+
         event(new ChargeStatusChanged($charge, 'charge.created'));
 
         // 2. Process Charge (Mock Gateway)
-        return $this->processCharge($charge);
+        try {
+            $processed = $this->processCharge($charge);
+            $this->metrics->recordFinancialEvent('charge_creation', 'configured', $processed->isSucceeded() ? 'success' : 'failure');
+
+            return $processed;
+        } catch (\Throwable $exception) {
+            $this->metrics->recordFinancialEvent('charge_creation', 'configured', 'failure');
+            throw $exception;
+        }
     }
 
     private function processCharge(Charge $charge): Charge
@@ -71,7 +80,7 @@ class ChargeService
         $gatewayResult = $this->gatewayManager->authorize($gatewayRequest);
 
         $newStatus = $gatewayResult->success ? ChargeStatus::SUCCEEDED : ChargeStatus::FAILED;
-        
+
         // Update internal metadata with gateway result
         $internalMetadata = $charge->internalMetadata;
         $internalMetadata['gateway_reference'] = $gatewayResult->gatewayReference;
@@ -96,7 +105,7 @@ class ChargeService
         );
 
         $this->repository->save($updatedCharge);
-        
+
         $reason = $gatewayResult->success ? 'Payment successful' : $gatewayResult->failureMessage;
         $this->recordTransition($charge->id, $charge->status, $newStatus, $reason);
 
@@ -114,7 +123,7 @@ class ChargeService
                 'charge_id' => $model->id,
                 'from_status' => $from?->value,
                 'to_status' => $to->value,
-                'reason' => $reason
+                'reason' => $reason,
             ]);
         }
     }

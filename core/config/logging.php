@@ -1,5 +1,6 @@
 <?php
 
+use App\Logging\StructuredLogProcessor;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -64,6 +65,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'webhooks' => [
@@ -72,6 +74,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'gateway' => [
@@ -80,6 +83,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'security' => [
@@ -88,6 +92,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'audit' => [
@@ -96,6 +101,7 @@ return [
             'level' => env('LOG_LEVEL', 'info'),
             'days' => env('LOG_DAILY_DAYS', 90),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'performance' => [
@@ -104,6 +110,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'single' => [
@@ -111,6 +118,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'daily' => [
@@ -119,6 +127,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogProcessor::class],
         ],
 
         'slack' => [

@@ -28,8 +28,6 @@ return [
 
     'env' => env('APP_ENV', 'production'),
 
-
-
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode
@@ -55,6 +53,8 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+
+    'monitor_token' => env('MONITOR_TOKEN'),
 
     /*
     |--------------------------------------------------------------------------
@@ -139,7 +139,7 @@ return [
 
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
-        'store'  => env('APP_MAINTENANCE_STORE', 'database'),
+        'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
     'version' => env('APP_VERSION', '1.4.0'),
