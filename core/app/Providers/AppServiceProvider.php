@@ -74,6 +74,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app['config']->set('translation.driver', 'file');
+
         $this->app->singleton(MetricsStore::class, function () {
             try {
                 $config = config('observability.metrics_baseline', []);
