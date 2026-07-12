@@ -122,6 +122,22 @@ $RECYCLE.BIN/
 # Local archives, backups and cleanup material
 backups/
 storage/
+!core/storage/
+core/storage/*
+!core/storage/framework/
+core/storage/framework/*
+!core/storage/framework/views/
+!core/storage/framework/views/.gitignore
+!core/storage/framework/cache/
+core/storage/framework/cache/*
+!core/storage/framework/cache/.gitignore
+!core/storage/framework/sessions/
+!core/storage/framework/sessions/.gitignore
+!core/storage/framework/testing/
+!core/storage/framework/testing/.gitignore
+!core/storage/logs/
+core/storage/logs/*
+!core/storage/logs/.gitignore
 core/_archive_legacy_review/
 core/DB/
 *.zip
