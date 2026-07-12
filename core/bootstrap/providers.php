@@ -1,13 +1,22 @@
 <?php
 
+use App\Providers\AliasServiceProvider;
+use App\Providers\AppServiceProvider;
+use App\Providers\AuthServiceProvider;
+use App\Providers\BroadcastServiceProvider;
+use App\Providers\PaymentServiceProvider;
+use App\Providers\TranslationServiceProvider;
+use App\Providers\ViewComposerServiceProvider;
+use Spatie\Permission\PermissionServiceProvider;
+
 return [
-    App\Providers\AliasServiceProvider::class,
-    App\Providers\AppServiceProvider::class,
-    App\Providers\AuthServiceProvider::class,
-    App\Providers\BroadcastServiceProvider::class,
-    App\Providers\PaymentServiceProvider::class,
-    App\Providers\ViewComposerServiceProvider::class,
-    App\Providers\HorizonServiceProvider::class,
-    Spatie\Permission\PermissionServiceProvider::class,
-    App\Providers\DomainEventServiceProvider::class,
+    AliasServiceProvider::class,
+    AppServiceProvider::class,
+    AuthServiceProvider::class,
+    BroadcastServiceProvider::class,
+    PaymentServiceProvider::class,
+    TranslationServiceProvider::class,
+    ViewComposerServiceProvider::class,
+    ViewComposerServiceProvider::class,
+    PermissionServiceProvider::class,
 ];
