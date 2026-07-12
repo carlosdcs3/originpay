@@ -53,11 +53,13 @@ jobs:
             # 4. Backup DB Pré-Migração (Laravel Backup)
             php artisan backup:run --only-db
             
-            # 5. Migrations
-            php artisan migrate --force
-            
-            # 6. Cache Reset & Optimization
+            # 5. Clear stale cached configuration before booting migration providers
             php artisan optimize:clear
+
+            # 6. Migrations
+            php artisan migrate --force
+
+            # 7. Cache Optimization
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
