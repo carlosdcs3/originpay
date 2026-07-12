@@ -8,6 +8,7 @@
         "php": "^8.3",
         "ext-dom": "*",
         "ext-libxml": "*",
+        "ext-pcntl": "*",
         "ext-zip": "*",
         "bacon/bacon-qr-code": "^3.0",
         "barryvdh/laravel-dompdf": "^3.0",
@@ -96,7 +97,10 @@
             "block-insecure": false
         },
         "platform": {
-            "php": "8.3.30"
+            "php": "8.3.30",
+            "ext-pcntl": "8.3.30",
+            "ext-posix": "8.3.30",
+            "ext-zip": "8.3.30"
         },
         "platform-check": false
     },

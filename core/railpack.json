@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "php",
+  "steps": {
+    "install": {
+      "variables": {
+        "RAILPACK_PHP_EXTENSIONS": "pcntl,posix"
+      }
+    }
+  }
+}
